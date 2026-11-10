@@ -39,22 +39,41 @@ Sau đó mở NSG 80/443 public, 22 chỉ từ IP hiện tại (không mở 5432
 powershell -File infra\tools\run-remote.ps1 -Path infra\vm\01-provision.sh
 ```
 
-### 2.2. Cập nhật app
+### 2.2. Cập nhật app (CI/CD)
 
 ```powershell
-powershell -File infra\deploy\deploy.ps1              # đầy đủ
-powershell -File infra\deploy\deploy.ps1 -SkipIndex   # chỉ backend/asset, giữ index.html trên VM
+git push origin main          # CI xanh -> Deploy tự chạy trên runner của VM
+gh workflow run deploy.yml --ref main   # hoặc chạy lại thủ công
+gh run watch
 ```
 
 Luồng:
 
-1. `scp` `app/app.py`, `app/index.html`, `app/app.css`, `app/app.js`, `app/login.html`,
-   `app/register.html`, `infra/deploy/nginx-cdb.conf`, `nginx-cloudflare-realip.conf` lên `/tmp/*.new`.
-2. `scp` `infra/deploy/deploy-on-vm.sh` → `/tmp/deploy.sh`.
-3. Trên VM: backup vào `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/`, cài file, `nginx -t`,
-   reload nginx, restart `cdb-kanban`.
-4. Health-check 3 mức: app trực tiếp `:8000`, qua nginx `:443 --resolve`, `/login`,
-   `/register`. Bất kỳ bước nào fail → `trap ERR` khôi phục backup và reload.
+1. `CI` (`.github/workflows/ci.yml`) chạy trên `ubuntu-latest`: Postgres 17 service,
+   apply `infra/db/schema.sql`, tạo `app_user` least-privilege, syntax check
+   (`py_compile`, `node --check`, `bash -n`) rồi `infra/test/ci-smoke.py` (57 case qua
+   Flask test client).
+2. `Deploy` (`.github/workflows/deploy.yml`) chạy khi CI trên `main` xanh, trên
+   **self-hosted runner** `cdb-vm` đặt ngay trên VM (chỉ cần outbound HTTPS, không mở
+   SSH cho GitHub). Runner checkout đúng commit CI đã test rồi gọi
+   `sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"`.
+3. `deploy.sh` backup `/opt/cdb/app` + nginx conf vào
+   `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/`, cài file, `nginx -t`, reload nginx,
+   restart `cdb-kanban`.
+4. Health-check 3 mức, retry 10 lần × 2 s: app trực tiếp `:8000`, qua nginx
+   `:443 --resolve`, `/login`, `/register`. Bất kỳ bước nào fail → `trap ERR` khôi phục
+   backup, restart và reload.
+
+Deploy trực tiếp trên VM khi đã có checkout (ví dụ để debug):
+
+```bash
+sudo bash infra/deploy/deploy.sh "$PWD"
+```
+
+Runner là systemd service
+`actions.runner.quanq026-cdb-kanban-lab.cdb-vm-runner` (user `azureuser`, thư mục
+`~/actions-runner`); xem `sudo systemctl status 'actions.runner*'` và log trong
+`~/actions-runner/_diag/`.
 
 **Bắt buộc:** mỗi lần sửa `app.css`/`app.js`, tăng `?v=` trong `app/index.html`,
 `app/login.html`, `app/register.html` (hiện `?v=20261110i`). Cloudflare cache asset ~4 h,
@@ -72,7 +91,7 @@ sudo systemctl is-active cdb-kanban
 
 ### 3.1. Rollback tự động
 
-`deploy-on-vm.sh` tự rollback nếu lỗi. Backup gần nhất:
+`deploy.sh` tự rollback nếu lỗi. Backup gần nhất:
 
 ```bash
 ls -1 /opt/cdb/app/backup-*

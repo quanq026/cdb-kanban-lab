@@ -104,21 +104,24 @@ là khác biệt có chủ ý, ghi ở [history.md](history.md) và [operations.
 ## 5. Đường deploy
 
 ```
-Máy local                         VM
-infra/deploy/deploy.ps1
-  scp app/*  ───────────────────► /tmp/*.new
-  scp nginx conf ───────────────► /tmp/*.new
-  scp deploy-on-vm.sh ──────────► /tmp/deploy.sh
-  ssh sudo bash /tmp/deploy.sh
-                                   ├─ backup /opt/cdb/app/backup-<stamp>/
-                                   ├─ install app + nginx conf
-                                   ├─ nginx -t && reload
-                                   ├─ restart cdb-kanban
-                                   └─ health 3 mức; lỗi → rollback
+push main ──► GitHub Actions
+                ├─ CI (ubuntu-latest): postgres:17 + schema + ci-smoke.py (57 case)
+                └─ Deploy (sau CI xanh, workflow_run)
+                     └─ self-hosted runner cdb-vm (trên VM, outbound HTTPS)
+                          └─ sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"
+                               ├─ backup /opt/cdb/app/backup-<stamp>/ + nginx conf
+                               ├─ install app + nginx conf
+                               ├─ nginx -t && reload
+                               ├─ restart cdb-kanban
+                               └─ health 3 mức, retry 10×2 s; lỗi → rollback
 ```
 
-Rollback tự động nằm trong `deploy-on-vm.sh` (`trap ERR`). Quy trình thủ công và rollback
-theo từng mốc: [operations.md](operations.md).
+Không cần mở SSH cho GitHub-hosted runner (NSG chỉ mở 22 từ IP hiện tại). Runner chạy
+bằng systemd service `actions.runner.quanq026-cdb-kanban-lab.cdb-vm-runner`, label
+`[self-hosted, cdb-vm]`.
+
+Rollback tự động nằm trong `infra/deploy/deploy.sh` (`trap ERR`). Quy trình thủ công và
+rollback theo từng mốc: [operations.md](operations.md).
 
 ## 6. Quyết định thiết kế đáng chú ý
 

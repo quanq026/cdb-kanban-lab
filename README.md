@@ -43,8 +43,8 @@ infra/
   local/                   01-init → 02-roles → 03-verify → 04-persistence → 05-backup-restore
   neon/                    01-restore → 02-verify
   https/                   01-acme → 02-cert → 03-nginx → 04-renew-hook → 05-hardening
-  deploy/                  deploy.ps1, deploy-on-vm.sh, cdb-kanban.service, nginx conf
-  test/                    app-tests.sh (108 case), ui-shots.mjs (8 ảnh), ui-drag-check.mjs
+  deploy/                  deploy.sh (backup + install + health + rollback), service, nginx conf
+  test/                    app-tests.sh (108 case), ci-smoke.py (57 case CI), ui-shots.mjs, ui-drag-check.mjs
   maintenance/             auth-*, schema-*, purge-*, idle-check, sql/ (migration up/down)
   tools/run-remote.ps1     Copy script LF lên VM rồi chạy bằng sudo
 
@@ -60,6 +60,7 @@ docs/
 
 README.md
 .gitignore
+.github/workflows/          ci.yml (Postgres 17 + smoke) · deploy.yml (runner trên VM)
 ```
 
 `infra/README.md` là bảng tra nhanh từng script.
@@ -77,8 +78,12 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\local\02-roles.sh
 powershell -File infra\tools\run-remote.ps1 -Path infra\local\05-backup-restore.sh
 powershell -File infra\tools\run-remote.ps1 -Path infra\neon\01-restore.sh
 
-# 2. Deploy app (backup + upload + restart + health-check + tự rollback)
-powershell -File infra\deploy\deploy.ps1
+# 2. Deploy app: push main → CI → Actions tự deploy lên VM
+git push origin main
+
+# 2b. Chạy lại deploy thủ công qua Actions (runner phải online)
+gh workflow run deploy.yml --ref main
+gh run watch
 
 # 3. Kiểm thử
 powershell -File infra\tools\run-remote.ps1 -Path infra\test\app-tests.sh
@@ -87,10 +92,14 @@ node infra\test\ui-drag-check.mjs docs\evidence\images\ui-drag-light.png
 powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-accounts.sh
 ```
 
-`deploy.ps1` sao lưu bản cũ vào `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/` trước khi ghi
-đè; nếu `nginx -t` fail, service không lên hoặc health-check fail thì tự khôi phục.
-Mỗi lần đổi `app.css`/`app.js` phải tăng `?v=` trong **cả ba** HTML vì Cloudflare cache
-asset tĩnh (~4 h).
+GitHub Actions: `CI` chạy `infra\test\ci-smoke.py` trên Postgres 17 (57 case) + syntax
+check; `Deploy` chạy sau khi CI trên `main` xanh, qua self-hosted runner trên VM
+(`runs-on: [self-hosted, cdb-vm]`) nên **không cần mở SSH cho GitHub**.
+
+`infra/deploy/deploy.sh` sao lưu bản cũ vào `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/`
+trước khi ghi đè; nếu `nginx -t` fail, service không lên hoặc health-check fail (retry
+10 lần) thì tự khôi phục. Mỗi lần đổi `app.css`/`app.js` phải tăng `?v=` trong **cả ba**
+HTML vì Cloudflare cache asset tĩnh (~4 h).
 
 ## Cấu hình production
 

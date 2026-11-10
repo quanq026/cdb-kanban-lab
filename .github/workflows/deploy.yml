@@ -1,0 +1,44 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to cdb-vm
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, cdb-vm]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Deploy (backup + install + restart + health + rollback)
+        run: sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"
+
+      - name: Verify production
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 20 http://127.0.0.1:8000/api/health
+          curl -fsS --max-time 20 -k --resolve kanban.akaine.io.vn:443:127.0.0.1 \
+            https://kanban.akaine.io.vn/api/health
+          curl -fsS -o /dev/null -w 'login=%{http_code}\n' --max-time 20 \
+            -k --resolve kanban.akaine.io.vn:443:127.0.0.1 \
+            https://kanban.akaine.io.vn/login

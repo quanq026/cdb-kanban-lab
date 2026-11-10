@@ -187,7 +187,23 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
 | 19 | Local test 503 `PoolTimeout` | `sslmode=disable` vẫn kèm `sslrootcert=system` | chỉ thêm `sslrootcert` khi `sslmode` bắt đầu bằng `verify` |
 | 20 | UI check báo reorder sai | test bấm `↑` trên "card cuối" sau mỗi lần → trả về thứ tự cũ | bấm theo `data-id` của task mục tiêu |
 
-## 13. Việc chưa làm
+## 13. CI/CD + self-hosted runner (08:25–08:40)
+
+- Thêm `.github/workflows/ci.yml`: Postgres 17 service, apply `infra/db/schema.sql`, tạo
+  `app_user` least-privilege, syntax check, chạy `infra/test/ci-smoke.py` (57 case qua
+  Flask test client). Chạy 57 PASS / 0 FAIL trên Docker Postgres của VM trước khi push.
+- Thêm `.github/workflows/deploy.yml`: trigger `workflow_run` sau CI xanh trên `main` +
+  `workflow_dispatch`; `runs-on: [self-hosted, cdb-vm]`, checkout đúng `head_sha`, gọi
+  `sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"`, verify health qua local nginx.
+- Gộp deploy còn **1 script** `infra/deploy/deploy.sh` (backup + install + `nginx -t` +
+  restart + health retry 10×2 s + `trap ERR` rollback); xoá `deploy.ps1` và
+  `deploy-on-vm.sh`.
+- Self-hosted runner trên VM (arm64, systemd service
+  `actions.runner.quanq026-cdb-kanban-lab.cdb-vm-runner`, label `cdb-vm`) để không phải
+  mở SSH inbound cho GitHub-hosted runner; chỉ cần outbound HTTPS.
+- Migration vẫn thủ công — deploy không tự chạy DDL.
+
+## 14. Việc chưa làm
 
 - Chưa có đổi/quên mật khẩu, xác thực email, CAPTCHA/2FA, khoá tài khoản.
 - Chưa có rate limit (đã bỏ theo yêu cầu).

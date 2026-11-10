@@ -59,6 +59,26 @@ leftover_test_users=0
 Nếu fail: script dừng ở case lỗi, vẫn chạy `trap` dọn tài khoản. Không sửa app để chiều
 test — kiểm tra lại kỳ vọng trước (đã từng sai ở case task user khác trả 404 thay vì 403).
 
+### 1.1. CI smoke — GitHub Actions
+
+| | |
+|---|---|
+| Workflow | `.github/workflows/ci.yml` (push/PR `main`, `workflow_dispatch`) |
+| Runner | `ubuntu-latest` + service `postgres:17`, DB `studydb` |
+| Chuẩn bị | apply `infra/db/schema.sql`, tạo `app_user` LOGIN least-privilege (assert `rolsuper=f`) |
+| Syntax | `py_compile app/app.py infra/test/ci-smoke.py`, `node --check app/app.js`, `bash -n infra/deploy/deploy.sh` |
+| Test | `python infra/test/ci-smoke.py` — **57 PASS / 0 FAIL** |
+| Kết quả thật | 57 PASS / 0 FAIL trên local Docker Postgres (VM) trước khi bật Actions |
+
+`ci-smoke.py` dùng Flask test client (không cần gunicorn/nginx): auth 401/302, register
+201 + trùng 409, `/api/me`, tạo task `position=0,1,2`, reorder trong cột, đổi cột,
+validate (title rỗng/201 ký tự, status sai, position âm, thiếu field), timestamp
+(`updated_at` tăng, `created_at` giữ), delete 200/404, logout/login, health 2 mức, và
+tự dọn `ci-*` (kết thúc `no leftover ci-* users`).
+
+Deploy tự chạy sau CI xanh trên `main` qua self-hosted runner `cdb-vm`; xem
+[operations.md](operations.md) §2.2.
+
 ## 2. Kiểm thử giao diện
 
 ### 2.1. Screenshot tự động
@@ -104,6 +124,7 @@ Chi tiết + ảnh: [evidence/ui.md](evidence/ui.md).
 | `app-tests-register.md` | 82 | đăng ký công khai + rate limit 5/giờ | lịch sử |
 | `app-tests-nolimit.md` | 86 | bỏ toàn bộ rate limit, top bar mới, bỏ footer | lịch sử |
 | `app-tests.sh` (+position/timestamps) | **108** | GĐ C schema: `position`, `created_at`, `updated_at` | **hiện tại** |
+| `ci-smoke.py` | 57 | CI/CD: Flask test client trên Postgres 17 trong GitHub Actions | **hiện tại** |
 
 Bộ cũ giữ trong git history (`6d3a2b7`); tóm tắt trong [evidence/api.md](evidence/api.md).
 

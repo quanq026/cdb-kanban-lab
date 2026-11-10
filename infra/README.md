@@ -23,12 +23,12 @@ working directory.
 | | `03-nginx.sh` | server block 443 TLS 1.2/1.3 |
 | | `04-renew-hook.sh` | deploy hook reload nginx sau gia hạn |
 | | `05-hardening.sh` | redirect HTTPS, security header, ACME 80/443 |
-| `deploy/` | `deploy.ps1` | local: upload app + nginx + chạy deploy trên VM |
-| | `deploy-on-vm.sh` | backup, cài file, health-check, tự rollback |
+| `deploy/` | `deploy.sh` | VM: backup, cài app + nginx, health-check (retry), tự rollback |
 | | `cdb-kanban.service` | systemd unit |
 | | `nginx-cdb.conf` | reverse proxy :80/:443 |
 | | `nginx-cloudflare-realip.conf` | `set_real_ip_from` + `CF-Connecting-IP` |
 | `test/` | `app-tests.sh` | 108 case API, tự đăng ký/tự dọn |
+| | `ci-smoke.py` | 57 case qua Flask test client cho GitHub Actions |
 | | `ui-shots.mjs` | 8 ảnh UI qua Chrome CDP |
 | | `ui-drag-check.mjs` | kiểm tra ô chèn khi kéo–thả + ảnh trạng thái drag |
 | `maintenance/` | `auth-migrate.sh` | thêm `users.password_hash` (local + Neon) |
@@ -53,7 +53,8 @@ vm/02-deploy-app.sh → vm/03-fix-tls.sh
 https/01-acme.sh → 02-cert.sh → 03-nginx.sh → 04-renew-hook.sh → 05-hardening.sh
 ```
 
-Cập nhật app sau này chỉ cần `deploy/deploy.ps1`; migration dùng
+Cập nhật app sau này chỉ cần push `main` (GitHub Actions `CI` → `Deploy`). Chạy lại
+deploy thủ công: `gh workflow run deploy.yml --ref main`. Migration vẫn thủ công bằng
 `maintenance/auth-*` (login) và `maintenance/schema-*` (tasks).
 
 ## Quy ước
