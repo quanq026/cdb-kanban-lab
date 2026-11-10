@@ -1,0 +1,7 @@
+.env
+.env*
+*.dump
+*.pem
+__pycache__/
+.venv/
+login-azure.ps1
