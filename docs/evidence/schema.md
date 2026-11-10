@@ -99,6 +99,9 @@ append `position=0` ở cột đích; PATCH title → `updated_at` tăng; `posit
 
 ## 6. Trạng thái production sau deploy + purge
 
+> Số liệu dưới đo ngay sau migration, trước khi seed dữ liệu mẫu. Hiện tại tài khoản thật
+> có 16 việc mẫu: `users=1 tasks=16`.
+
 ```text
 == production / neon (app_user) ==
 users=1
@@ -116,7 +119,8 @@ order=2:doing:0,3:done:0,1:todo:0,5:doing:0,4:todo:0
 ```
 
 - Deploy backup: `/opt/cdb/app/backup-2026-11-10-074504`.
-- Asset bump `?v=20261110g` (Cloudflare cache ~4 h).
+- Asset bump `?v=20261110g` lúc migrate (Cloudflare cache ~4 h); chỉ báo kéo–thả sau đó
+  dùng `h`/`i`.
 - Bộ test API: **108 PASS / 0 FAIL**, `leftover_test_users=0` — xem [api.md](api.md).
 - Browser headless: reorder `↑` ×2 + `→` đúng, reload giữ thứ tự, 0 console error — xem
   [ui.md](ui.md) §5.

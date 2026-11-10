@@ -9,7 +9,7 @@ cloud đó — kèm đăng nhập, đăng ký, HTTPS và bộ test thật.
 | Web | <https://kanban.akaine.io.vn/> |
 | Health | <https://kanban.akaine.io.vn/api/health> |
 | Repo | `quanq026/cdb-kanban-lab` (private) |
-| Trạng thái | Demo đang chạy; production `users=1`, `tasks=0` |
+| Trạng thái | Demo đang chạy; production `users=1`, `tasks=16` (16 việc mẫu) |
 
 ## Kiến trúc trong 10 giây
 
@@ -35,7 +35,7 @@ app/                        Runtime web app (deploy vào /opt/cdb/app)
   login.html                Trang đăng nhập
   register.html             Trang đăng ký
   app.css                   1 file CSS (design B, light/dark, responsive)
-  app.js                    1 file JS (board, auth, optimistic update, drag & drop, reorder)
+  app.js                    1 file JS (board, auth, optimistic update, drag & drop + chỉ báo chèn)
 
 infra/
   db/schema.sql             users / tasks (position + timestamps) / index / trigger / seed
@@ -44,7 +44,7 @@ infra/
   neon/                    01-restore → 02-verify
   https/                   01-acme → 02-cert → 03-nginx → 04-renew-hook → 05-hardening
   deploy/                  deploy.ps1, deploy-on-vm.sh, cdb-kanban.service, nginx conf
-  test/                    app-tests.sh (108 case), ui-shots.mjs (8 ảnh)
+  test/                    app-tests.sh (108 case), ui-shots.mjs (8 ảnh), ui-drag-check.mjs
   maintenance/             auth-*, schema-*, purge-*, idle-check, sql/ (migration up/down)
   tools/run-remote.ps1     Copy script LF lên VM rồi chạy bằng sudo
 
@@ -83,6 +83,7 @@ powershell -File infra\deploy\deploy.ps1
 # 3. Kiểm thử
 powershell -File infra\tools\run-remote.ps1 -Path infra\test\app-tests.sh
 node infra\test\ui-shots.mjs docs\evidence\images
+node infra\test\ui-drag-check.mjs docs\evidence\images\ui-drag-light.png
 powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-accounts.sh
 ```
 

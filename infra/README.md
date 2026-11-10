@@ -30,6 +30,7 @@ working directory.
 | | `nginx-cloudflare-realip.conf` | `set_real_ip_from` + `CF-Connecting-IP` |
 | `test/` | `app-tests.sh` | 108 case API, tự đăng ký/tự dọn |
 | | `ui-shots.mjs` | 8 ảnh UI qua Chrome CDP |
+| | `ui-drag-check.mjs` | kiểm tra ô chèn khi kéo–thả + ảnh trạng thái drag |
 | `maintenance/` | `auth-migrate.sh` | thêm `users.password_hash` (local + Neon) |
 | | `auth-rollback.sh` | drop cột `password_hash` |
 | | `auth-secret.sh` | thêm `APP_SECRET_KEY` nếu chưa có |

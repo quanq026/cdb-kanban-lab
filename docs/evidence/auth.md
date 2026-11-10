@@ -163,7 +163,7 @@ test_users=0  all_users=0  all_tasks=0
 purge_test_accounts=done
 ```
 
-Production hiện: `users=1` (tài khoản thật) `tasks=0`; không còn tài khoản test.
+Production hiện: `users=1` (tài khoản thật) `tasks=16` (16 việc mẫu); không còn tài khoản test.
 
 ## 6. Phục hồi dữ liệu demo (nếu thật sự cần)
 

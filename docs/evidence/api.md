@@ -192,7 +192,7 @@ leftover_test_users=0
 ```
 
 - Tài khoản test chỉ tồn tại trong lúc chạy; script xoá task trước rồi user (FK).
-- Production sau chạy + purge: `users=1` (tài khoản thật), `tasks=0`; không còn
+- Production sau chạy + purge: `users=1` (tài khoản thật), `tasks=16` (16 việc mẫu); không còn
   `test-*`/`shot+*`/`verify+*`.
 - Schema production sau migration: `id,user_id,title,status,position,created_at,updated_at`;
   index `idx_tasks_user_status_position`; trigger `trg_tasks_updated_at`.

@@ -8,11 +8,14 @@
   `mobile`, `prefers-color-scheme`.
 - Script tự đăng ký `shot+<ts>@local.test`, chụp board trống, tạo 3 việc mẫu
   (1 Todo / 1 Doing / 1 Done), chụp board + menu tài khoản. Không cần seed/mật khẩu.
+- `infra/test/ui-drag-check.mjs` kiểm tra riêng kéo–thả: ô chèn tại đúng index, thẻ bên dưới
+  trượt ra, thả thì đổi thứ tự và reload vẫn giữ; chụp `ui-drag-light.png` giữa lúc kéo.
 
 ## 1. Lệnh chạy
 
 ```powershell
 node infra\test\ui-shots.mjs docs\evidence\images
+node infra\test\ui-drag-check.mjs docs\evidence\images\ui-drag-light.png
 powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-accounts.sh
 ```
 
@@ -28,10 +31,12 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 | `ui-menu-light.png` | 31329 | true | `/` | `1/1/1` | true | false | `rgb(251, 250, 247)` | 1440 |
 | `ui-mobile-light.png` | 15179 | true | `/` | `1/1/1` | false | false | `rgb(251, 250, 247)` | 375 |
 | `ui-mobile-dark.png` | 15442 | true | `/` | `1/1/1` | false | false | `rgb(22, 21, 19)` | 375 |
+| `ui-drag-light.png` | 42845 | – | `/` (đang kéo) | `4/0/0` | – | false | `rgb(251, 250, 247)` | 1440 |
 
 `hasFooter=false` ở mọi ảnh board/empty; `ui-menu-light.png` chụp menu avatar đang mở
 (email + `Đăng xuất`). `bg` khớp token design B: sáng `#fbfaf7`, tối `#161513`;
-`width` đúng 1440/375 → breakpoint + `prefers-color-scheme` chạy thật.
+`width` đúng 1440/375 → breakpoint + `prefers-color-scheme` chạy thật. `ui-drag-light.png`
+do `ui-drag-check.mjs` chụp giữa lúc kéo nên không nằm trong `ui-shots.json` (`–`).
 
 > Metadata gốc đo tại `evidence/`; sau khi gộp repo, trường `file` được remap sang
 > `docs/evidence/images/`. Số đo (`bytes`, `meta`) giữ nguyên.
@@ -44,6 +49,7 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 | ![Board trống](images/ui-empty-light.png) | ![Menu tài khoản](images/ui-menu-light.png) |
 | ![Desktop light](images/ui-desktop-light.png) | ![Desktop dark](images/ui-desktop-dark.png) |
 | ![Mobile light](images/ui-mobile-light.png) | ![Mobile dark](images/ui-mobile-dark.png) |
+| ![Ô chèn khi kéo–thả](images/ui-drag-light.png) | |
 
 ## 3. Design B
 
@@ -71,7 +77,7 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 | Sửa tiêu đề (`✎` → Enter) | PATCH `title` 200, chữ đổi tại chỗ |
 | Chuyển cột `→` | optimistic, PATCH 200, đếm cột + chip đổi |
 | Sắp thứ tự `↑`/`↓` | optimistic, PATCH `{status, position}` 200; đổi chỗ trong cột, reload giữ nguyên |
-| Kéo–thả | thả giữa 2 thẻ → chèn đúng index (không chỉ đổi cột); thả vào cột khác → append |
+| Kéo–thả | rê tới đâu hiện ô chèn ở đúng index (ô cao dần, thẻ dưới trượt ra, viền cột sáng); thả là chèn đúng chỗ, kéo sang cột khác cũng có ô chèn |
 | Lọc | không khớp → 0 thẻ + empty state; reorder bị tạm tắt khi đang lọc |
 | `/` | focus ô tìm kiếm |
 | Xoá | `<dialog>` xác nhận `#55 — Việc kiểm thử đăng ký (Doing)` → DELETE 200, về 3 empty state |
@@ -99,7 +105,30 @@ Script CDP tạm (cùng cơ chế `ui-shots.mjs`): đăng ký `shot+order<ts>@lo
 
 - Thứ tự đổi đúng sau mỗi PATCH; reload vẫn giữ (server là nguồn sự thật).
 - Nút `↑`/`↓` disabled ở đầu/cuối cột; cảm ứng không cần kéo–thả.
-- Tài khoản `shot+*` được dọn bằng `purge-test-accounts.sh`; production về `users=1 tasks=0`.
+- Tài khoản `shot+*` được dọn bằng `purge-test-accounts.sh`; production còn `users=1 tasks=16`
+  (16 việc mẫu của tài khoản thật).
+
+### 5.1. Chỉ báo vị trí khi kéo–thả (`ui-drag-check.mjs`)
+
+Script tạo 4 việc `drag a..d`, kéo **d** lên trên **a**, đọc ô chèn sau ~300 ms, thả, rồi
+kéo **c** sang Doing và reload:
+
+```json
+{
+  "drag_indicator_ok": true,
+  "before": [107, 108, 109, 110],
+  "slot": { "index": "0", "height": 72, "opacity": 0.99, "firstChild": true, "nextId": 107 },
+  "after_drop": [110, 107, 108, 109],
+  "cross_column": [109],
+  "persisted": { "todo": [110, 107, 108], "doing": [109] },
+  "console_errors": 0
+}
+```
+
+- Ô chèn nằm đúng trước thẻ đầu, cao bằng thẻ (72 px), có nhãn `Thả để chèn vào đây`.
+- Thẻ bên dưới bị đẩy ra nhờ transition chiều cao 180 ms; viền cột đổi màu khi hover.
+- Thả xong ô chèn biến mất, thứ tự mới giữ sau reload; kéo sang cột khác cũng hiện ô chèn.
+- Ảnh trạng thái: [images/ui-drag-light.png](images/ui-drag-light.png).
 
 ## 6. Lỗi tìm thấy & sửa
 
@@ -107,7 +136,7 @@ Script CDP tạm (cùng cơ chế `ui-shots.mjs`): đăng ký `shot+order<ts>@lo
   `.slow[hidden]{display:none}`; chụp lại toàn bộ.
 - Cache asset: HTML mới + JS cũ → `TypeError: ... addEventListener of null`, board trắng.
   Sửa `?v=20261110f` + origin `no-cache`; Cloudflare vẫn cache ~4 h → **luôn bump `?v=`**
-  (bản schema GĐ C dùng `?v=20261110g`).
+  (schema GĐ C dùng `g`, chỉ báo kéo–thả dùng `h`/`i`).
 - Test chuyển cột ngay sau lưu bị bỏ qua vì `busy` (guard double-submit) — hành vi đúng.
 - Script ảnh phải `Page.navigate` lại sau khi đăng ký/tạo task qua `fetch`.
 

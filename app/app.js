@@ -81,6 +81,49 @@ function el(tag, className, text) {
   return node;
 }
 
+let dragState = null;
+let dropSlot = null;
+
+function clearDropSlot() {
+  if (dropSlot) {
+    dropSlot.remove();
+    dropSlot = null;
+  }
+  document.querySelectorAll(".col.over").forEach((c) => c.classList.remove("over"));
+}
+
+function showDropSlot(list, cards, index, height) {
+  if (!dropSlot) {
+    dropSlot = el("div", "drop-slot");
+    dropSlot.setAttribute("aria-hidden", "true");
+    dropSlot.style.height = "0px";
+  }
+  const ref = cards[index] || null;
+  if (dropSlot.parentElement !== list || dropSlot.nextElementSibling !== ref) {
+    list.insertBefore(dropSlot, ref);
+  }
+  dropSlot.dataset.index = String(index);
+  if (!dropSlot.classList.contains("on")) {
+    void dropSlot.offsetHeight;
+    dropSlot.classList.add("on");
+    dropSlot.style.height = height + "px";
+  }
+}
+
+function dragIndex(list, event) {
+  const cards = [...list.querySelectorAll(".task")]
+    .filter((c) => !dragState || c !== dragState.node);
+  let index = cards.length;
+  for (let i = 0; i < cards.length; i += 1) {
+    const rect = cards[i].getBoundingClientRect();
+    if (event.clientY < rect.top + rect.height / 2) {
+      index = i;
+      break;
+    }
+  }
+  return { cards, index };
+}
+
 function emptyState(status) {
   const box = el("div", "empty");
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -154,11 +197,13 @@ function card(task, position, total) {
     if (busy || state.query) { e.preventDefault(); return; }
     e.dataTransfer.setData("text/plain", String(task.id));
     e.dataTransfer.effectAllowed = "move";
+    dragState = { id: task.id, node, height: Math.round(node.getBoundingClientRect().height) };
     node.classList.add("dragging");
   });
   node.addEventListener("dragend", () => {
     node.classList.remove("dragging");
-    document.querySelectorAll(".col.over").forEach((c) => c.classList.remove("over"));
+    dragState = null;
+    clearDropSlot();
   });
   return node;
 }
@@ -449,34 +494,39 @@ function initBoard() {
 
   for (const col of document.querySelectorAll(".col")) {
     col.addEventListener("dragover", (e) => {
+      if (!dragState || state.query || state.busy.has(dragState.id)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       col.classList.add("over");
+      const list = col.querySelector(".list");
+      const { cards, index } = dragIndex(list, e);
+      showDropSlot(list, cards, index, dragState.height);
     });
     col.addEventListener("dragleave", (e) => {
-      if (!col.contains(e.relatedTarget)) col.classList.remove("over");
+      if (col.contains(e.relatedTarget)) return;
+      col.classList.remove("over");
+      const board = document.getElementById("board");
+      if (!board || !board.contains(e.relatedTarget)) clearDropSlot();
     });
     col.addEventListener("drop", (e) => {
       e.preventDefault();
-      col.classList.remove("over");
-      const id = Number(e.dataTransfer.getData("text/plain"));
-      const task = state.tasks.find((t) => t.id === id);
-      if (!task || state.busy.has(id)) return;
+      if (!dragState || state.query) { clearDropSlot(); return; }
+      const dragId = dragState.id;
+      const task = state.tasks.find((t) => t.id === dragId);
       const status = col.dataset.status;
       const list = col.querySelector(".list");
-      const cards = [...list.querySelectorAll(".task")];
-      let index = cards.length;
-      for (let i = 0; i < cards.length; i += 1) {
-        const rect = cards[i].getBoundingClientRect();
-        if (e.clientY < rect.top + rect.height / 2) { index = i; break; }
-      }
-      const from = cards.findIndex((c) => Number(c.dataset.id) === id);
-      if (from >= 0 && from < index) index -= 1;
+      let index = dropSlot && dropSlot.parentElement === list
+        ? Number(dropSlot.dataset.index)
+        : null;
+      if (index === null) index = dragIndex(list, e).index;
+      clearDropSlot();
+      dragState = null;
+      if (!task || state.busy.has(dragId)) return;
       if (task.status === status) {
-        const current = columnTasks(status).findIndex((t) => t.id === id);
+        const current = columnTasks(status).findIndex((t) => t.id === dragId);
         if (current === index) return;
       }
-      moveTask(id, status, index);
+      moveTask(dragId, status, index);
     });
   }
 

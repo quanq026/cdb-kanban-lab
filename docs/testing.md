@@ -88,6 +88,7 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 | `N` / `/` | mở dialog thêm việc / focus tìm kiếm |
 | Thêm/sửa/chuyển/xoá | optimistic, toast, dialog xác nhận; lỗi thì hoàn tác |
 | Sắp thứ tự trong cột | nút `↑`/`↓` (ẩn tác dụng khi đang lọc) + kéo–thả; reload vẫn giữ thứ tự |
+| Kéo–thả | có ô chèn nhấp nháy đúng vị trí, các thẻ bên dưới trượt ra; thả là chèn đúng index |
 | Chuyển cột `←`/`→` hoặc kéo | append cuối cột đích, `position` do server cấp |
 | Đăng xuất | về `/login`; `/api/me`, `/api/tasks` = 401 |
 | Console | 0 error |

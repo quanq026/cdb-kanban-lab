@@ -148,7 +148,21 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
 - Production sau purge: `users=1 tasks=0`; schema `id,user_id,title,status,position,created_at,updated_at`,
   index mới + trigger hiện diện.
 
-## 11. Lỗi đã gặp & cách sửa
+## 11. Chỉ báo kéo–thả + dữ liệu mẫu (08:09–08:20)
+
+- Seed 16 việc mẫu cho tài khoản thật: Todo 8 / Doing 5 / Done 3, `position` liên tục
+  `0..n-1` (script một lần, không commit); production `users=1 tasks=16`.
+- Kéo–thả có **ô chèn** đúng index: rê tới đâu, một khối dashed teal cao dần (180 ms) đẩy
+  các thẻ bên dưới trượt ra; nhãn `Thả để chèn vào đây`; viền cột sáng khi hover.
+- Drop lấy index từ chính ô chèn (không đoán lại); kéo sang cột khác cũng hiện ô chèn;
+  `dragleave` ra ngoài board thì dọn; tôn trọng `prefers-reduced-motion`.
+- Test CDP mới `infra/test/ui-drag-check.mjs`: kéo **d** lên đầu (slot index 0, cao 72 px,
+  opacity .99), thả → `[d,a,b,c]`; kéo **c** sang Doing → `[c]`; reload giữ nguyên;
+  0 console error. Ảnh `docs/evidence/images/ui-drag-light.png`.
+- Asset `?v=20261110i`; deploy backup `backup-2026-11-10-081130`, `-081214`; health 3 mức OK.
+- Sau khi dọn tài khoản test: `users=1 tasks=16`, không còn `shot+*`/`test-*`.
+
+## 12. Lỗi đã gặp & cách sửa
 
 | # | Lỗi | Nguyên nhân | Cách sửa |
 |---:|---|---|---|
@@ -173,7 +187,7 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
 | 19 | Local test 503 `PoolTimeout` | `sslmode=disable` vẫn kèm `sslrootcert=system` | chỉ thêm `sslrootcert` khi `sslmode` bắt đầu bằng `verify` |
 | 20 | UI check báo reorder sai | test bấm `↑` trên "card cuối" sau mỗi lần → trả về thứ tự cũ | bấm theo `data-id` của task mục tiêu |
 
-## 12. Việc chưa làm
+## 13. Việc chưa làm
 
 - Chưa có đổi/quên mật khẩu, xác thực email, CAPTCHA/2FA, khoá tài khoản.
 - Chưa có rate limit (đã bỏ theo yêu cầu).

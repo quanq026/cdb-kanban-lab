@@ -1,7 +1,8 @@
 # Evidence — Database & Cloud
 
 Gồm Postgres local (GĐ 2), Neon (GĐ 3), monitoring và dự toán chi phí. Số liệu lấy từ lần
-chạy `2026-11-09`; production sau purge `2026-11-10` có `users=1 tasks=0` (local vẫn seed).
+chạy `2026-11-09`; production sau purge `2026-11-10` có `users=1 tasks=0`, sau đó seed 16 việc
+mẫu cho tài khoản thật (`users=1 tasks=16`; local vẫn seed 2 user / 5 task).
 
 ## 1. Postgres local
 

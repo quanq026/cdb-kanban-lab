@@ -57,7 +57,7 @@ Luồng:
    `/register`. Bất kỳ bước nào fail → `trap ERR` khôi phục backup và reload.
 
 **Bắt buộc:** mỗi lần sửa `app.css`/`app.js`, tăng `?v=` trong `app/index.html`,
-`app/login.html`, `app/register.html` (hiện `?v=20261110g`). Cloudflare cache asset ~4 h,
+`app/login.html`, `app/register.html` (hiện `?v=20261110i`). Cloudflare cache asset ~4 h,
 origin `no-cache` không đủ.
 
 Kiểm tra sau deploy:
@@ -180,7 +180,7 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-migra
 | Backup Neon định kỳ | **Chưa bật** — Neon Free không có PITR dài; dump thủ công khi cần |
 
 Purge **không** đụng schema: `users`/`tasks` (kể cả `password_hash`, `position`, timestamp)
-giữ nguyên, chỉ xoá row. Production hiện `users=1` (tài khoản thật) `tasks=0`; local docker
+giữ nguyên, chỉ xoá row. Production hiện `users=1` (tài khoản thật) `tasks=16` (16 việc mẫu); local docker
 vẫn giữ seed 2 user / 5 task.
 
 ## 6. TLS & domain
