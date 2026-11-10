@@ -28,7 +28,7 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
   **output thật**. Số liệu không làm tròn tùy tiện.
 - Secret luôn được che: `<endpoint>`, `<redacted>`, `PGPASSWORD=<sai>`. Không có mật khẩu,
   hash thật hay API key trong repo.
-- Bộ evidence cũ (20 file rời) đã được gộp vào 5 file này; bản raw đầy đủ vẫn xem được
+- Bộ evidence cũ (20 file rời) đã được gộp vào 6 file này; bản raw đầy đủ vẫn xem được
   trong git history commit `6d3a2b7` (`evidence/`).
 - Ảnh cũ (7 ảnh, còn footer) đã bị thay bằng bộ 8 ảnh hiện tại.
 
