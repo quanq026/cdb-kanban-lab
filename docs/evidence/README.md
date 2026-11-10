@@ -10,7 +10,7 @@ Bằng chứng thật của lab: lệnh đã chạy + output đo được. Ảnh
 | [auth.md](auth.md) | Migration login, ma trận lỗi, session, purge demo + đăng ký công khai |
 | [schema.md](schema.md) | Migration `tasks.position`/`created_at`/`updated_at`, index, trigger, rollback diễn tập |
 | [https.md](https.md) | Domain, cert Let's Encrypt, TLS, Cloudflare settings, security header |
-| [../testing.md §1.1](../testing.md) | CI smoke **57 case** qua Flask test client + Postgres 17 trên GitHub Actions |
+| [../testing.md §1](../testing.md) | CI smoke **57 case** qua Flask test client + Postgres 17 trên GitHub Actions |
 
 ## Tái tạo
 
