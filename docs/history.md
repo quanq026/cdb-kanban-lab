@@ -202,6 +202,9 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
   `actions.runner.quanq026-cdb-kanban-lab.cdb-vm-runner`, label `cdb-vm`) để không phải
   mở SSH inbound cho GitHub-hosted runner; chỉ cần outbound HTTPS.
 - Migration vẫn thủ công — deploy không tự chạy DDL.
+- Kết quả thật: CI run `42783544055` xanh (job 24 s), Deploy run `42783611898` xanh
+  (backup `backup-2026-11-10-083356`, `deploy=ok`, health 3 mức OK, `login=200`).
+  Hash 6 file trên VM khớp đúng commit `3b5a3e5`; bộ 108 case vẫn **108 PASS / 0 FAIL**.
 
 ## 14. Việc chưa làm
 
