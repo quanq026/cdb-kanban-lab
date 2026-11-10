@@ -17,15 +17,15 @@ Phạm vi: migration `tasks.position`, `created_at`, `updated_at`, index mới v
 
 ## 2. File
 
-- Up: `infra/maintenance/sql/2026-11-10-task-order.sql`
-- Down: `infra/maintenance/sql/2026-11-10-task-order-rollback.sql`
-- Runner: `infra/maintenance/schema-migrate.sh` / `schema-rollback.sh`
-- DDL canonical: `infra/db/schema.sql`
+- Up: `infra/ops/maintenance/sql/2026-11-10-task-order.sql`
+- Down: `infra/ops/maintenance/sql/2026-11-10-task-order-rollback.sql`
+- Runner: `infra/ops/maintenance/schema-migrate.sh` / `schema-rollback.sh`
+- DDL canonical: `infra/setup/db/schema.sql`
 
 ## 3. Diễn tập up → down trong transaction (local Docker)
 
 ```bash
-powershell -File infra\tools\run-remote.ps1 -Path <rehearse-task-order.sh>
+powershell -File infra\ops\run-remote.ps1 -Path <rehearse-task-order.sh>
 ```
 
 ```text
@@ -64,7 +64,7 @@ after_rollback_columns=0    <- khong de lai thay doi sau ROLLBACK
 ## 4. Migration thật (local Docker + Neon)
 
 ```bash
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-migrate.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\schema-migrate.sh
 ```
 
 ```text
@@ -128,7 +128,7 @@ order=2:doing:0,3:done:0,1:todo:0,5:doing:0,4:todo:0
 ## 7. Rollback
 
 ```bash
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-rollback.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\schema-rollback.sh
 ```
 
 Chỉ đụng `tasks`: drop trigger/function, drop 3 cột, tạo lại `idx_tasks_user_status`.

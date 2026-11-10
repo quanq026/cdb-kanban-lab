@@ -15,7 +15,7 @@
 | Secret lab/owner | `/etc/cdb/secrets.env` (600 root): mật khẩu local, owner Neon, API key |
 | Secret local | `.env` / `.env.azure` (gitignored) — **không** commit, không in ra output |
 
-`infra/tools/run-remote.ps1` chuẩn hoá CRLF → LF rồi `scp` + `ssh sudo bash`; dùng nó
+`infra/ops/run-remote.ps1` chuẩn hoá CRLF → LF rồi `scp` + `ssh sudo bash`; dùng nó
 thay vì nhét lệnh vào chuỗi `ssh "..."` (PowerShell hiểu `||`, `$`, quote rất khác).
 
 ## 2. Deploy app
@@ -36,7 +36,7 @@ az vm create -g rg-demo -n vm-cdb `
 Sau đó mở NSG 80/443 public, 22 chỉ từ IP hiện tại (không mở 5432), rồi:
 
 ```powershell
-powershell -File infra\tools\run-remote.ps1 -Path infra\vm\01-provision.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\setup\vm\01-provision.sh
 ```
 
 ### 2.2. Cập nhật app (CI/CD)
@@ -50,13 +50,13 @@ gh run watch
 Luồng:
 
 1. `CI` (`.github/workflows/ci.yml`) chạy trên `ubuntu-latest`: Postgres 17 service,
-   apply `infra/db/schema.sql`, tạo `app_user` least-privilege, syntax check
-   (`py_compile`, `node --check`, `bash -n`) rồi `infra/test/ci-smoke.py` (57 case qua
+   apply `infra/setup/db/schema.sql`, tạo `app_user` least-privilege, syntax check
+   (`py_compile`, `node --check`, `bash -n`) rồi `.github/scripts/ci-smoke.py` (57 case qua
    Flask test client).
 2. `Deploy` (`.github/workflows/deploy.yml`) chạy khi CI trên `main` xanh, trên
    **self-hosted runner** `cdb-vm` đặt ngay trên VM (chỉ cần outbound HTTPS, không mở
    SSH cho GitHub). Runner checkout đúng commit CI đã test rồi gọi
-   `sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"`.
+   `sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"`.
 3. `deploy.sh` backup `/opt/cdb/app` + nginx conf vào
    `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/`, cài file, `nginx -t`, reload nginx,
    restart `cdb-kanban`.
@@ -67,7 +67,7 @@ Luồng:
 Deploy trực tiếp trên VM khi đã có checkout (ví dụ để debug):
 
 ```bash
-sudo bash infra/deploy/deploy.sh "$PWD"
+sudo bash infra/ops/deploy.sh "$PWD"
 ```
 
 Runner là systemd service
@@ -119,7 +119,7 @@ sudo nginx -t && sudo systemctl reload nginx
 ### 3.3. Rollback phần login (GĐ C)
 
 ```powershell
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\auth-rollback.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\auth-rollback.sh
 ```
 
 Sau đó:
@@ -141,7 +141,7 @@ Rollback phải khôi phục **cả `app.py` và `index.html`**.
 ### 3.4. Rollback phần đăng ký + purge demo
 
 ```powershell
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-accounts.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\purge-test-accounts.sh
 ```
 
 Tắt đăng ký công khai: khôi phục `app.py`/`index.html`/`login.html` từ backup trước bản
@@ -151,7 +151,7 @@ register, xoá `register.html`, restart. Dữ liệu demo (nếu thật sự c�
 ### 3.5. Rollback schema tasks (GĐ C)
 
 ```powershell
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-rollback.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\schema-rollback.sh
 ```
 
 Script chỉ trên bảng `tasks`: drop trigger + function, drop 3 cột mới, tạo lại
@@ -168,8 +168,8 @@ Hai migration GĐ C, đều chạy giống local Docker và Neon bằng role own
 | `tasks.position`, `created_at`, `updated_at` | `sql/2026-11-10-task-order.sql` / `...-task-order-rollback.sql` | `schema-migrate.sh` / `schema-rollback.sh` |
 
 ```powershell
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\auth-migrate.sh
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-migrate.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\auth-migrate.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\schema-migrate.sh
 ```
 
 - `schema-migrate.sh` là **additive + idempotent**: thêm cột, backfill `position` theo `id`,
@@ -182,19 +182,19 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-migra
   index cũ quay lại → `ROLLBACK` không để lại thay đổi.
 - `app_user` giữ nguyên quyền mức bảng; không cấp thêm. Trigger chạy không cần `EXECUTE`
   riêng cho `app_user` (đã xác nhận bằng transaction ở trên).
-- Secret ký session: `infra/maintenance/auth-secret.sh` thêm `APP_SECRET_KEY` vào
+- Secret ký session: `infra/ops/maintenance/auth-secret.sh` thêm `APP_SECRET_KEY` vào
   `/etc/cdb/app.env` nếu chưa có (không in giá trị).
 
 ## 5. Backup, restore, purge
 
 | Việc | Cách làm |
 |---|---|
-| Dump local (lab) | `infra/local/05-backup-restore.sh` → `/home/azureuser/studydb-lab.dump` |
-| Restore sang Neon | `infra/neon/01-restore.sh` (pg_restore `--no-owner --no-privileges`) |
-| Kiểm tra Neon | `infra/neon/02-verify.sh` (TLS, quyền, CRUD) |
+| Dump local (lab) | `infra/setup/local/05-backup-restore.sh` → `/home/azureuser/studydb-lab.dump` |
+| Restore sang Neon | `infra/setup/neon/01-restore.sh` (pg_restore `--no-owner --no-privileges`) |
+| Kiểm tra Neon | `infra/setup/neon/02-verify.sh` (TLS, quyền, CRUD) |
 | Backup trước purge | `/home/azureuser/neon-demo-purge-<stamp>.sql` (data-only, column-inserts) |
-| Purge demo | `infra/maintenance/purge-neon-demo.sh` — backup rồi xoá task → user trên Neon |
-| Dọn tài khoản test | `infra/maintenance/purge-test-accounts.sh` — `test-*`, `shot+*`, `verify+*` |
+| Purge demo | `infra/ops/maintenance/purge-neon-demo.sh` — backup rồi xoá task → user trên Neon |
+| Dọn tài khoản test | `infra/ops/maintenance/purge-test-accounts.sh` — `test-*`, `shot+*`, `verify+*` |
 | Backup app | Tự động mỗi lần deploy: `/opt/cdb/app/backup-*` |
 | Backup Neon định kỳ | **Chưa bật** — Neon Free không có PITR dài; dump thủ công khi cần |
 

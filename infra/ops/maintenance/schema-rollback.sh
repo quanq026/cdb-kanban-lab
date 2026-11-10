@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rollback GĐ C schema: bỏ tasks.position/created_at/updated_at, trả index cũ.
-# Bản canonical: infra/maintenance/sql/2026-11-10-task-order-rollback.sql.
+# Bản canonical: infra/ops/maintenance/sql/2026-11-10-task-order-rollback.sql.
 set -euo pipefail
 
 SQL=$(cat <<'SQL'

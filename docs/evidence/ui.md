@@ -4,19 +4,23 @@
   (`position`, `created_at`, `updated_at`)**, bỏ rate limit, top bar gọn, bỏ footer;
   Neon đã purge demo.
 - URL: `https://kanban.akaine.io.vn/` · `/login` · `/register`
-- Công cụ: Chrome headless qua CDP (`infra/test/ui-shots.mjs`), emulation đúng `width`,
-  `mobile`, `prefers-color-scheme`.
+- Công cụ: Chrome headless qua CDP (`infra/test/ui-shots.mjs`, đã xoá khỏi repo), emulation
+  đúng `width`, `mobile`, `prefers-color-scheme`.
 - Script tự đăng ký `shot+<ts>@local.test`, chụp board trống, tạo 3 việc mẫu
   (1 Todo / 1 Doing / 1 Done), chụp board + menu tài khoản. Không cần seed/mật khẩu.
-- `infra/test/ui-drag-check.mjs` kiểm tra riêng kéo–thả: ô chèn tại đúng index, thẻ bên dưới
-  trượt ra, thả thì đổi thứ tự và reload vẫn giữ; chụp `ui-drag-light.png` giữa lúc kéo.
+- `infra/test/ui-drag-check.mjs` (đã xoá) kiểm tra riêng kéo–thả: ô chèn tại đúng index,
+  thẻ bên dưới trượt ra, thả thì đổi thứ tự và reload vẫn giữ; chụp `ui-drag-light.png`
+  giữa lúc kéo.
 
 ## 1. Lệnh chạy
 
+Các script chụp ảnh (`ui-shots.mjs`, `ui-drag-check.mjs`) đã xoá khỏi repo để tinh gọn.
+Bộ ảnh + metadata dưới đây là output thật, giữ nguyên làm evidence. Khi cần tạo lại, khôi
+phục script từ git history (`5349b16`).
+
 ```powershell
-node infra\test\ui-shots.mjs docs\evidence\images
-node infra\test\ui-drag-check.mjs docs\evidence\images\ui-drag-light.png
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-accounts.sh
+# Dọn tài khoản test còn sót (nếu có)
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\purge-test-accounts.sh
 ```
 
 ## 2. Metadata thật (`ui-shots.json`)

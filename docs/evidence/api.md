@@ -2,7 +2,8 @@
 
 ## 1. Bộ hiện tại — 108 PASS / 0 FAIL (2026-11-10)
 
-- Script: `infra/test/app-tests.sh`; chạy `sudo bash /tmp/app-tests.sh` trên VM.
+- Script: `infra/test/app-tests.sh` (đã xoá khỏi repo; giữ trong git history); chạy
+  `sudo bash /tmp/app-tests.sh` trên VM.
 - Đường test: `https://kanban.akaine.io.vn` qua nginx (`curl --resolve ...:443:127.0.0.1 -k`);
   `?detail=1` gọi thẳng `http://127.0.0.1:8000`.
 - Không cần seed; tự đăng ký `test-<ts>-a|b@example.test` + 6 tài khoản burst; `trap` tự dọn.
@@ -213,7 +214,7 @@ Bộ 46/67/82 là lịch sử (giữ trong git `6d3a2b7`), không dùng làm ti�
 
 ## 3. Cold start Neon (sau purge)
 
-Sau idle 330 s (`infra/maintenance/idle-check.sh`):
+Sau idle 330 s (`infra/ops/maintenance/idle-check.sh`):
 
 ```text
 lan 1 = 1.857 s   (Neon wake)

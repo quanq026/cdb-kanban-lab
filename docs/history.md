@@ -189,13 +189,13 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
 
 ## 13. CI/CD + self-hosted runner (08:25–08:40)
 
-- Thêm `.github/workflows/ci.yml`: Postgres 17 service, apply `infra/db/schema.sql`, tạo
-  `app_user` least-privilege, syntax check, chạy `infra/test/ci-smoke.py` (57 case qua
+- Thêm `.github/workflows/ci.yml`: Postgres 17 service, apply `infra/setup/db/schema.sql`, tạo
+  `app_user` least-privilege, syntax check, chạy `.github/scripts/ci-smoke.py` (57 case qua
   Flask test client). Chạy 57 PASS / 0 FAIL trên Docker Postgres của VM trước khi push.
 - Thêm `.github/workflows/deploy.yml`: trigger `workflow_run` sau CI xanh trên `main` +
   `workflow_dispatch`; `runs-on: [self-hosted, cdb-vm]`, checkout đúng `head_sha`, gọi
-  `sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"`, verify health qua local nginx.
-- Gộp deploy còn **1 script** `infra/deploy/deploy.sh` (backup + install + `nginx -t` +
+  `sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"`, verify health qua local nginx.
+- Gộp deploy còn **1 script** `infra/ops/deploy.sh` (backup + install + `nginx -t` +
   restart + health retry 10×2 s + `trap ERR` rollback); xoá `deploy.ps1` và
   `deploy-on-vm.sh`.
 - Self-hosted runner trên VM (arm64, systemd service
@@ -206,7 +206,22 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
   (backup `backup-2026-11-10-083356`, `deploy=ok`, health 3 mức OK, `login=200`).
   Hash 6 file trên VM khớp đúng commit `3b5a3e5`; bộ 108 case vẫn **108 PASS / 0 FAIL**.
 
-## 14. Việc chưa làm
+## 14. Tinh gọn `infra/` + bỏ test thủ công
+
+- Chia `infra/` theo tần suất dùng:
+  - `infra/setup/` — chạy **một lần** khi dựng mới: `db/schema.sql`, `vm/`
+    (01-provision, 02-deploy-app, 03-fix-tls, systemd unit), `local/`, `neon/`, `https/`.
+  - `infra/ops/` — dùng **thường xuyên**: `deploy.sh`, nginx conf, `run-remote.ps1`,
+    `maintenance/` (auth/schema migration, purge, idle-check, `sql/`).
+- Xoá test thủ công khỏi repo: `infra/test/app-tests.sh` (108 case), `ui-shots.mjs`,
+  `ui-drag-check.mjs`. Kết quả lịch sử vẫn ở `docs/evidence/` + git history
+  (`6d3a2b7`, `5349b16`).
+- `ci-smoke.py` (57 case) chuyển sang `.github/scripts/` vì là hạ tầng CI, không phải
+  script vận hành; `ci.yml` cập nhật đường dẫn tương ứng.
+- `deploy.sh` đọc nginx conf từ `infra/ops/`; deploy/rollback/health giữ nguyên hành vi.
+- Cập nhật README, `infra/README.md`, `docs/` theo layout mới.
+
+## 15. Việc chưa làm
 
 - Chưa có đổi/quên mật khẩu, xác thực email, CAPTCHA/2FA, khoá tài khoản.
 - Chưa có rate limit (đã bỏ theo yêu cầu).

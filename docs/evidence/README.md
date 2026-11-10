@@ -15,17 +15,16 @@ Bằng chứng thật của lab: lệnh đã chạy + output đo được. Ảnh
 ## Tái tạo
 
 ```powershell
-# API (trên VM)
-powershell -File infra\tools\run-remote.ps1 -Path infra\test\app-tests.sh
-
-# Ảnh UI (từ máy local, cần Chrome + Node ≥ 20)
-node infra\test\ui-shots.mjs docs\evidence\images
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-accounts.sh
-
 # CI smoke (GitHub Actions, hoặc local với Postgres đã apply schema)
 gh run list --workflow=ci.yml --limit 3
-python infra\test\ci-smoke.py
+python .github\scripts\ci-smoke.py
+
+# Dọn tài khoản test còn sót (nếu có)
+powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\purge-test-accounts.sh
 ```
+
+Script test thủ công cũ (`app-tests.sh`, `ui-shots.mjs`, `ui-drag-check.mjs`) đã xoá khỏi
+repo; output của chúng vẫn giữ nguyên trong thư mục này và git history.
 
 ## Quy ước
 

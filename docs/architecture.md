@@ -36,7 +36,7 @@ Cùng VM (chỉ lab/backup, không phục vụ app):
 | NSG | 22 ← IP vận hành; 80, 443 ← `*`; không có 5432 |
 | Runtime | gunicorn 2 worker, Flask 3.1, psycopg 3.3, psycopg_pool 3.3 |
 | App dir | `/opt/cdb/app`; venv `/opt/cdb/venv/bin/python` |
-| Service | systemd `cdb-kanban` (`infra/deploy/cdb-kanban.service`) |
+| Service | systemd `cdb-kanban` (`infra/setup/vm/cdb-kanban.service`) |
 | nginx | site `cdb-kanban` + `conf.d/cloudflare-realip.conf` |
 | Neon | project `icy-sound-48483515`, branch `br-silent-darkness-a1gqqmlj`, DB `studydb`, role `app_user` |
 | Neon endpoint | `ep-ancient-bread-a13k7y58.ap-southeast-1.aws.neon.tech` (trực tiếp; pooled có tồn tại nhưng không dùng) |
@@ -72,9 +72,9 @@ erDiagram
   không đăng nhập được cho tới khi có hash.
 - `tasks.position`/`created_at`/`updated_at` thêm bằng migration GĐ C (additive + idempotent)
   và backfill `position` theo `id` hiện có; `updated_at` do trigger `trg_tasks_updated_at`.
-- DDL đầy đủ: `infra/db/schema.sql`. Migration up/down:
-  `infra/maintenance/sql/2026-11-10-login*.sql` và
-  `infra/maintenance/sql/2026-11-10-task-order*.sql`.
+- DDL đầy đủ: `infra/setup/db/schema.sql`. Migration up/down:
+  `infra/ops/maintenance/sql/2026-11-10-login*.sql` và
+  `infra/ops/maintenance/sql/2026-11-10-task-order*.sql`.
 
 ### Vì sao `status` thay vì `done boolean`
 
@@ -96,7 +96,7 @@ là khác biệt có chủ ý, ghi ở [history.md](history.md) và [operations.
    `max_idle=120`, `max_lifetime=1800`, `reconnect_timeout=30`, retry 1 lần khi
    `OperationalError` — đủ để Neon Free scale-to-zero không gây 500.
 5. **IP thật**: nginx `real_ip_header CF-Connecting-IP`, chỉ tin dải Cloudflare
-   (`infra/deploy/nginx-cloudflare-realip.conf`) rồi ghi đè `X-Forwarded-For`; Flask dùng
+   (`infra/ops/nginx-cloudflare-realip.conf`) rồi ghi đè `X-Forwarded-For`; Flask dùng
    `ProxyFix(x_for=1, x_proto=1, x_host=1)`. Log thấy IP người dùng, không phải IP CF.
 6. **Log**: mỗi request một dòng `METHOD path status Xms ip=...` vào journald; không ghi
    body/header/token.
@@ -108,7 +108,7 @@ push main ──► GitHub Actions
                 ├─ CI (ubuntu-latest): postgres:17 + schema + ci-smoke.py (57 case)
                 └─ Deploy (sau CI xanh, workflow_run)
                      └─ self-hosted runner cdb-vm (trên VM, outbound HTTPS)
-                          └─ sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"
+                          └─ sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
                                ├─ backup /opt/cdb/app/backup-<stamp>/ + nginx conf
                                ├─ install app + nginx conf
                                ├─ nginx -t && reload
@@ -120,7 +120,7 @@ Không cần mở SSH cho GitHub-hosted runner (NSG chỉ mở 22 từ IP hiện
 bằng systemd service `actions.runner.quanq026-cdb-kanban-lab.cdb-vm-runner`, label
 `[self-hosted, cdb-vm]`.
 
-Rollback tự động nằm trong `infra/deploy/deploy.sh` (`trap ERR`). Quy trình thủ công và
+Rollback tự động nằm trong `infra/ops/deploy.sh` (`trap ERR`). Quy trình thủ công và
 rollback theo từng mốc: [operations.md](operations.md).
 
 ## 6. Quyết định thiết kế đáng chú ý

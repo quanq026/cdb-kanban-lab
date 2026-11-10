@@ -20,8 +20,8 @@ liệu demo. Schema `tasks.position`/`created_at`/`updated_at` đã làm — xem
 
 ## 2. Migration
 
-File: `infra/maintenance/sql/2026-11-10-login.sql` và `...-login-rollback.sql`; chạy bằng
-`infra/maintenance/auth-migrate.sh` / `auth-rollback.sh` (role owner từ `secrets.env`).
+File: `infra/ops/maintenance/sql/2026-11-10-login.sql` và `...-login-rollback.sql`; chạy bằng
+`infra/ops/maintenance/auth-migrate.sh` / `auth-rollback.sh` (role owner từ `secrets.env`).
 
 ```sql
 -- up
@@ -151,8 +151,8 @@ Chạy lại idempotent tạo thêm `...-062240.sql` (1137 B, không còn row).
 
 | Pattern | Nguồn |
 |---|---|
-| `test-%@example.test` | `infra/test/app-tests.sh` (trap tự xoá; script dọn phần sót) |
-| `shot+%@local.test` | `infra/test/ui-shots.mjs` |
+| `test-%@example.test` | `infra/test/app-tests.sh` (đã xoá; trap tự xoá, script dọn phần sót) |
+| `shot+%@local.test` | `infra/test/ui-shots.mjs` (đã xoá) |
 | `verify+%@local.test` | kiểm tra tay trên browser |
 
 ```text
@@ -184,6 +184,6 @@ chỉ xoá row. Tải backup về trước khi xoá VM nếu muốn giữ.
 - `app/app.py` — login/logout/me/register, guard session, `same_user`, cache header.
 - `app/login.html`, `app/register.html`, `app/app.css` (`.auth-*`), `app/app.js`
   (`initLogin`, `initRegister`, logout, avatar menu, theme).
-- `infra/maintenance/auth-{migrate,rollback,secret}.sh` + `sql/2026-11-10-login*.sql`.
-- `infra/test/app-tests.sh`, `infra/test/ui-shots.mjs`.
-- `infra/maintenance/purge-{neon-demo,test-accounts}.sh`.
+- `infra/ops/maintenance/auth-{migrate,rollback,secret}.sh` + `sql/2026-11-10-login*.sql`.
+- `infra/test/app-tests.sh`, `infra/test/ui-shots.mjs` (đã xoá; giữ trong git history).
+- `infra/ops/maintenance/purge-{neon-demo,test-accounts}.sh`.

@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 \
-            -f infra/db/schema.sql
+            -f infra/setup/db/schema.sql
           psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE app_user LOGIN PASSWORD 'ci-app-password';
           GRANT CONNECT ON DATABASE studydb TO app_user;
@@ -84,9 +84,9 @@ jobs:
       - name: Syntax checks
         run: |
           set -euo pipefail
-          python -m py_compile app/app.py infra/test/ci-smoke.py
+          python -m py_compile app/app.py .github/scripts/ci-smoke.py
           node --check app/app.js
-          bash -n infra/deploy/deploy.sh
+          bash -n infra/ops/deploy.sh
 
       - name: Smoke test (Flask test client)
-        run: python infra/test/ci-smoke.py
+        run: python .github/scripts/ci-smoke.py

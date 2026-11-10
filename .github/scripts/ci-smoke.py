@@ -3,7 +3,7 @@
 
 Runs the app through Flask's test client instead of a live HTTP server, so CI
 does not need gunicorn or nginx. The GitHub Actions workflow starts postgres:17,
-applies infra/db/schema.sql, creates app_user, then runs this file.
+applies infra/setup/db/schema.sql, creates app_user, then runs this file.
 
 Required env: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, APP_SECRET_KEY.
 DB_SSLMODE=disable is fine for the CI service container.

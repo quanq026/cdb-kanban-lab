@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 1
 
       - name: Deploy (backup + install + restart + health + rollback)
-        run: sudo bash infra/deploy/deploy.sh "$GITHUB_WORKSPACE"
+        run: sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
 
       - name: Verify production
         run: |

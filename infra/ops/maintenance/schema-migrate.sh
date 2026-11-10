@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # GĐ C schema migration: tasks.position + created_at + updated_at.
-# Bản canonical: infra/maintenance/sql/2026-11-10-task-order.sql (giữ đồng bộ).
+# Bản canonical: infra/ops/maintenance/sql/2026-11-10-task-order.sql (giữ đồng bộ).
 # run-remote.ps1 chỉ scp 1 file nên SQL được nhúng ở đây.
 set -euo pipefail
 

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Don sach tai khoan do test/evidence tao ra. Khong dung vao tai khoan that.
-#   test-%@example.test   -> infra/test/app-tests.sh
-#   shot+%@local.test     -> infra/test/ui-shots.mjs
+#   test-%@example.test   -> app-tests.sh (da xoa khoi repo)
+#   shot+%@local.test     -> ui-shots.mjs (da xoa khoi repo)
 #   verify+%@local.test   -> kiem tra tay tren trinh duyet
 #
 # Chay: sudo bash /tmp/step.sh

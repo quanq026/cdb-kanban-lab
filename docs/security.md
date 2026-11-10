@@ -107,4 +107,5 @@ Theo yêu cầu, **đã bỏ toàn bộ** limiter: ghi 60/phút, login 8 lần s
 - [ ] `APP_SECRET_KEY` mới khi đổi môi trường.
 - [ ] NSG SSH đúng IP hiện tại.
 - [ ] `certbot renew --dry-run` PASS.
-- [ ] Chạy `infra/test/app-tests.sh` và kiểm tra `leftover_test_users=0`.
+- [ ] Chạy `.github/scripts/ci-smoke.py` (hoặc để CI trên GitHub Actions chạy) và kiểm tra
+  dữ liệu test đã được dọn (`purge-test-accounts.sh` nếu chạy tay).

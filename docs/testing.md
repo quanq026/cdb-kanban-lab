@@ -1,74 +1,19 @@
 # Kiểm thử
 
-## 1. Bộ test hiện tại — 108 case
+## 1. CI smoke — bộ test duy nhất còn trong repo (57 case)
 
-| | |
-|---|---|
-| Script | `infra/test/app-tests.sh` |
-| Cách chạy | `powershell -File infra\tools\run-remote.ps1 -Path infra\test\app-tests.sh` |
-| Đường test | `https://kanban.akaine.io.vn` qua nginx (`curl --resolve ...:443:127.0.0.1 -k`); health chi tiết gọi thẳng `http://127.0.0.1:8000` |
-| Dữ liệu | Tự đăng ký `test-<ts>-a|b@example.test` + 6 tài khoản burst; `trap` tự xoá task → user |
-| Kết quả | **108 PASS / 0 FAIL**, `leftover_test_users=0` |
-
-Không cần seed, không cần restart service, không còn bước reset limiter (app không giữ
-bộ đếm).
-
-> Đã chạy lại **sau migration + deploy schema GĐ C** (2026-11-10): 108 PASS / 0 FAIL,
-> `leftover_test_users=0` — bao gồm 22 case `position`/timestamp mới.
-
-### Phạm vi
-
-| Nhóm | Số case | Nội dung |
-|---|---:|---|
-| Chưa đăng nhập | 6 | API 401, trang 302, `/login` `/register` `/api/health` 200 |
-| Đăng ký — validate | 5 | email sai, mật khẩu 7 ký tự, thiếu field, body không JSON |
-| Đăng ký — tạo user | 6 | 201, tự set session, board rỗng, `/register` đã đăng nhập → 302 |
-| Đăng ký — trùng email | 2 | 409 `unique_violation` |
-| Đăng ký — user 2 | 1 | 201 |
-| Đăng ký — burst | 2 | 6 lần liên tiếp đều 201, 0 lần 429 |
-| Đăng nhập | 13 | sai/thiếu/đúng, `/api/me`, `/api/users`, redirect |
-| Health 2 mức + giả IP | 6 | public không lộ field, `?detail=1` localhost, spoof → 403 |
-| Scope theo session | 3 | `user_id` lệch → 403 `forbidden_user` |
-| Tạo + validate task | 7 | 201, title rỗng/201 ký tự/thiếu, body sai, `user_id` lệch |
-| PATCH | 11 | status, title, cả hai, thiếu field, status sai, 404 |
-| Position + timestamps | 22 | position tăng dần, reorder, append khi đổi cột, clamp, validate, `updated_at > created_at` |
-| Quyền sở hữu 2 session | 4 | user2 PATCH/DELETE task user1 → 404 |
-| DELETE query string | 6 | thiếu `user_id`, không phải số, xoá, xoá lại 404 |
-| Header + cookie | 9 | 5 security header, `Set-Cookie`, `HttpOnly`, `SameSite=Lax`, `Secure` |
-| Logout | 2 | 200, `/api/me` sau đó 401 |
-| Burst ghi | 3 | 70 POST liên tiếp: 70×400, **0×429**, 0×5xx (kèm login lại) |
-
-Chi tiết output thật: [evidence/api.md](evidence/api.md). Output raw đầy đủ nằm trong git
-history commit `6d3a2b7` (`evidence/app-tests-nolimit.md`).
-
-### Chạy lại và đọc kết quả
-
-```bash
-# trên VM (run-remote.ps1 đã scp + sudo)
-sudo bash /tmp/app-tests.sh
-```
-
-Kỳ vọng cuối:
-
-```text
-== summary ==
-pass=108 fail=0
-leftover_test_users=0
-```
-
-Nếu fail: script dừng ở case lỗi, vẫn chạy `trap` dọn tài khoản. Không sửa app để chiều
-test — kiểm tra lại kỳ vọng trước (đã từng sai ở case task user khác trả 404 thay vì 403).
-
-### 1.1. CI smoke — GitHub Actions
+> Các script test thủ công cũ (`app-tests.sh`, `ui-shots.mjs`, `ui-drag-check.mjs`) đã được
+> xoá khỏi repo để tinh gọn. Kết quả lịch sử vẫn giữ trong [evidence](evidence/) và git
+> history; bộ 108 case từng đạt **108 PASS / 0 FAIL** trước khi xoá.
 
 | | |
 |---|---|
 | Workflow | `.github/workflows/ci.yml` (push/PR `main`, `workflow_dispatch`) |
 | Runner | `ubuntu-latest` + service `postgres:17`, DB `studydb` |
-| Chuẩn bị | apply `infra/db/schema.sql`, tạo `app_user` LOGIN least-privilege (assert `rolsuper=f`) |
-| Syntax | `py_compile app/app.py infra/test/ci-smoke.py`, `node --check app/app.js`, `bash -n infra/deploy/deploy.sh` |
-| Test | `python infra/test/ci-smoke.py` — **57 PASS / 0 FAIL** |
-| Kết quả thật | 57 PASS / 0 FAIL trên local Docker Postgres (VM) trước khi bật Actions |
+| Chuẩn bị | apply `infra/setup/db/schema.sql`, tạo `app_user` LOGIN least-privilege (assert `rolsuper=f`) |
+| Syntax | `py_compile app/app.py .github/scripts/ci-smoke.py`, `node --check app/app.js`, `bash -n infra/ops/deploy.sh` |
+| Test | `python .github/scripts/ci-smoke.py` — **57 PASS / 0 FAIL** |
+| Kết quả thật | 57 PASS / 0 FAIL trên Docker Postgres (VM) và trong GitHub Actions |
 
 `ci-smoke.py` dùng Flask test client (không cần gunicorn/nginx): auth 401/302, register
 201 + trùng 409, `/api/me`, tạo task `position=0,1,2`, reorder trong cột, đổi cột,
@@ -76,24 +21,25 @@ validate (title rỗng/201 ký tự, status sai, position âm, thiếu field), t
 (`updated_at` tăng, `created_at` giữ), delete 200/404, logout/login, health 2 mức, và
 tự dọn `ci-*` (kết thúc `no leftover ci-* users`).
 
+Chạy local (cần Postgres đã apply schema):
+
+```powershell
+python .github\scripts\ci-smoke.py
+```
+
 Deploy tự chạy sau CI xanh trên `main` qua self-hosted runner `cdb-vm`; xem
 [operations.md](operations.md) §2.2.
 
 ## 2. Kiểm thử giao diện
 
-### 2.1. Screenshot tự động
+### 2.1. Ảnh UI (đã có sẵn)
 
-```powershell
-node infra\test\ui-shots.mjs docs\evidence\images
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-accounts.sh
-```
+Script chụp `ui-shots.mjs` đã được xoá khỏi repo. Bộ 8 ảnh + metadata vẫn nằm trong
+`docs/evidence/images/` và `docs/evidence/ui-shots.json`; khi cần chụp lại, dùng Chrome
+headless thủ công hoặc khôi phục script từ git history (`5349b16`).
 
-- Chrome headless qua CDP, emulation đúng `width` (1440/375), `mobile`, `prefers-color-scheme`.
-- Tự đăng ký `shot+<ts>@local.test`, chụp board trống, tạo 3 việc mẫu (1 Todo/1 Doing/1
-  Done) rồi chụp board + menu tài khoản.
-- Chỉ chụp khi `.task` render (hoặc 3 empty state); không chờ footer (đã bỏ).
 - 8 ảnh: login, register, empty, desktop light/dark, menu, mobile light/dark.
-- Metadata: `docs/evidence/ui-shots.json`.
+- Ảnh ô chèn kéo–thả: `docs/evidence/images/ui-drag-light.png`.
 
 ### 2.2. Browser thật (thủ công)
 
@@ -123,10 +69,11 @@ Chi tiết + ảnh: [evidence/ui.md](evidence/ui.md).
 | `app-tests-auth.md` | 67 | GĐ C: login/session, dùng seed | lịch sử |
 | `app-tests-register.md` | 82 | đăng ký công khai + rate limit 5/giờ | lịch sử |
 | `app-tests-nolimit.md` | 86 | bỏ toàn bộ rate limit, top bar mới, bỏ footer | lịch sử |
-| `app-tests.sh` (+position/timestamps) | **108** | GĐ C schema: `position`, `created_at`, `updated_at` | **hiện tại** |
+| `app-tests.sh` (+position/timestamps) | **108** | GĐ C schema: `position`, `created_at`, `updated_at` | đã xoá (từng 108 PASS) |
 | `ci-smoke.py` | 57 | CI/CD: Flask test client trên Postgres 17 trong GitHub Actions | **hiện tại** |
 
-Bộ cũ giữ trong git history (`6d3a2b7`); tóm tắt trong [evidence/api.md](evidence/api.md).
+Bộ cũ giữ trong git history (`6d3a2b7`, `5349b16`); tóm tắt trong
+[evidence/api.md](evidence/api.md).
 
 ## 4. Kiểm thử hạ tầng (đã chạy, không tự động)
 
@@ -144,8 +91,8 @@ Bộ cũ giữ trong git history (`6d3a2b7`); tóm tắt trong [evidence/api.md]
 
 ## 5. Nguyên tắc khi sửa
 
-1. Sửa hành vi → chạy lại **toàn bộ** 108 case, không chỉ case liên quan.
-2. Sửa UI → chụp lại 8 ảnh + kiểm browser thật; bump `?v=` nếu đổi CSS/JS.
-3. Sửa schema → migration up/down + diễn tập rollback trong transaction + test.
-4. Test phải tự dọn dữ liệu (`trap`), kết thúc bằng `leftover_test_users=0`.
+1. Sửa hành vi → chạy `ci-smoke.py` + kiểm tay các luồng chính; bộ 108 case đã xoá khỏi repo.
+2. Sửa UI → kiểm browser thật (desktop/mobile, light/dark, kéo–thả); bump `?v=` nếu đổi CSS/JS.
+3. Sửa schema → migration up/down + diễn tập rollback trong transaction + smoke test.
+4. Test/seed phải tự dọn dữ liệu; production giữ `users=1 tasks=16`.
 5. Không đưa secret vào test; không in mật khẩu/hash ra output.

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Deploy the app from a git checkout onto this VM.
 #
-# Usage (on the VM): sudo bash infra/deploy/deploy.sh <checkout-dir>
+# Usage (on the VM): sudo bash infra/ops/deploy.sh <checkout-dir>
 #
 # The GitHub Actions deploy job calls it with $GITHUB_WORKSPACE. A human can use
-# the repo root, e.g. `sudo bash infra/deploy/deploy.sh "$PWD"`.
+# the repo root, e.g. `sudo bash infra/ops/deploy.sh "$PWD"`.
 #
 # Steps: back up -> install app + nginx conf -> nginx -t -> restart -> health
 # checks with retry. Any failure triggers an automatic rollback (trap ERR).
@@ -33,8 +33,8 @@ for f in $REQUIRED; do
   fi
 done
 for f in nginx-cdb.conf nginx-cloudflare-realip.conf; do
-  if [ ! -f "$SRC/infra/deploy/$f" ]; then
-    echo "missing $SRC/infra/deploy/$f" >&2
+  if [ ! -f "$SRC/infra/ops/$f" ]; then
+    echo "missing $SRC/infra/ops/$f" >&2
     exit 2
   fi
 done
@@ -76,8 +76,8 @@ rollback() {
 }
 trap rollback ERR
 
-install -m 644 "$SRC/infra/deploy/nginx-cdb.conf" "$NGINX_SITE"
-install -m 644 "$SRC/infra/deploy/nginx-cloudflare-realip.conf" "$CF_REALIP"
+install -m 644 "$SRC/infra/ops/nginx-cdb.conf" "$NGINX_SITE"
+install -m 644 "$SRC/infra/ops/nginx-cloudflare-realip.conf" "$CF_REALIP"
 for f in $MANAGED; do
   if [ -f "$SRC/app/$f" ]; then
     install -m 644 -o "$OWNER" -g "$GROUP" "$SRC/app/$f" "$APP/$f"
