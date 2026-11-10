@@ -7,6 +7,16 @@ const state = { user: null, tasks: [], loading: true, query: "", busy: new Set()
 let pendingDelete = null;
 let slowTimer = null;
 
+const byOrder = (a, b) => a.position - b.position || a.id - b.id;
+
+function sortTasks() {
+  state.tasks.sort(byOrder);
+}
+
+function columnTasks(status) {
+  return state.tasks.filter((t) => t.status === status).sort(byOrder);
+}
+
 class ApiError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -85,7 +95,7 @@ function emptyState(status) {
   return box;
 }
 
-function card(task) {
+function card(task, position, total) {
   const busy = state.busy.has(task.id);
   const node = el("article", "task" + (busy ? " busy" : ""));
   node.dataset.id = String(task.id);
@@ -111,14 +121,24 @@ function card(task) {
     b.disabled = busy;
     return b;
   };
+
+  const up = makeBtn("Đưa việc #" + task.id + " lên", "↑");
+  up.disabled = busy || Boolean(state.query) || position === 0;
+  up.addEventListener("click", () => moveTask(task.id, task.status, position - 1));
+
+  const down = makeBtn("Đưa việc #" + task.id + " xuống", "↓");
+  down.disabled = busy || Boolean(state.query) || position === total - 1;
+  down.addEventListener("click", () => moveTask(task.id, task.status, position + 1));
+
+  actions.append(up, down);
   if (idx > 0) {
     const left = makeBtn("Chuyển sang " + LABEL[STATUSES[idx - 1]], "←");
-    left.addEventListener("click", () => patchTask(task.id, { status: STATUSES[idx - 1] }));
+    left.addEventListener("click", () => moveTask(task.id, STATUSES[idx - 1]));
     actions.append(left);
   }
   if (idx < STATUSES.length - 1) {
     const right = makeBtn("Chuyển sang " + LABEL[STATUSES[idx + 1]], "→");
-    right.addEventListener("click", () => patchTask(task.id, { status: STATUSES[idx + 1] }));
+    right.addEventListener("click", () => moveTask(task.id, STATUSES[idx + 1]));
     actions.append(right);
   }
   const edit = makeBtn("Sửa tiêu đề #" + task.id, "✎");
@@ -131,7 +151,7 @@ function card(task) {
   node.append(title, meta);
 
   node.addEventListener("dragstart", (e) => {
-    if (busy) { e.preventDefault(); return; }
+    if (busy || state.query) { e.preventDefault(); return; }
     e.dataTransfer.setData("text/plain", String(task.id));
     e.dataTransfer.effectAllowed = "move";
     node.classList.add("dragging");
@@ -159,7 +179,7 @@ function render() {
       list.append(emptyState(status));
       continue;
     }
-    for (const task of items) list.append(card(task));
+    items.forEach((task, i) => list.append(card(task, i, items.length)));
   }
 }
 
@@ -186,6 +206,48 @@ async function patchTask(id, patch) {
   }
 }
 
+function optimisticMove(task, status, position) {
+  const oldStatus = task.status;
+  const oldColumn = columnTasks(oldStatus).filter((t) => t.id !== task.id);
+  const target = status === oldStatus
+    ? oldColumn
+    : columnTasks(status).filter((t) => t.id !== task.id);
+  const index = position === undefined
+    ? target.length
+    : Math.max(0, Math.min(position, target.length));
+  target.splice(index, 0, task);
+  task.status = status;
+  if (status !== oldStatus) oldColumn.forEach((t, i) => { t.position = i; });
+  target.forEach((t, i) => { t.position = i; });
+}
+
+async function moveTask(id, status, position) {
+  const task = state.tasks.find((t) => t.id === id);
+  if (!task || state.busy.has(id)) return;
+  const before = state.tasks.map((t) => ({ ...t }));
+  optimisticMove(task, status, position);
+  state.busy.add(id);
+  sortTasks();
+  render();
+  try {
+    const body = { user_id: state.user.id, status };
+    if (position !== undefined) body.position = position;
+    const row = await api("/api/tasks/" + id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    Object.assign(task, row);
+  } catch (err) {
+    state.tasks = before;
+    toast(err.message, "error");
+  } finally {
+    state.busy.delete(id);
+    sortTasks();
+    render();
+  }
+}
+
 async function addTask(title) {
   const row = await api("/api/tasks", {
     method: "POST",
@@ -193,6 +255,7 @@ async function addTask(title) {
     body: JSON.stringify({ user_id: state.user.id, title }),
   });
   state.tasks.push(row);
+  sortTasks();
   render();
   toast("Đã thêm việc", "success");
 }
@@ -254,6 +317,7 @@ function askDelete(task) {
 
 async function loadTasks() {
   state.tasks = await api("/api/tasks?user_id=" + encodeURIComponent(state.user.id));
+  sortTasks();
 }
 
 function initAccountMenu() {
@@ -397,7 +461,22 @@ function initBoard() {
       col.classList.remove("over");
       const id = Number(e.dataTransfer.getData("text/plain"));
       const task = state.tasks.find((t) => t.id === id);
-      if (task && task.status !== col.dataset.status) patchTask(id, { status: col.dataset.status });
+      if (!task || state.busy.has(id)) return;
+      const status = col.dataset.status;
+      const list = col.querySelector(".list");
+      const cards = [...list.querySelectorAll(".task")];
+      let index = cards.length;
+      for (let i = 0; i < cards.length; i += 1) {
+        const rect = cards[i].getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) { index = i; break; }
+      }
+      const from = cards.findIndex((c) => Number(c.dataset.id) === id);
+      if (from >= 0 && from < index) index -= 1;
+      if (task.status === status) {
+        const current = columnTasks(status).findIndex((t) => t.id === id);
+        if (current === index) return;
+      }
+      moveTask(id, status, index);
     });
   }
 

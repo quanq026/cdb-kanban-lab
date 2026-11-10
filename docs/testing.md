@@ -1,6 +1,6 @@
 # Kiểm thử
 
-## 1. Bộ test hiện tại — 86 case
+## 1. Bộ test hiện tại — 108 case
 
 | | |
 |---|---|
@@ -8,13 +8,13 @@
 | Cách chạy | `powershell -File infra\tools\run-remote.ps1 -Path infra\test\app-tests.sh` |
 | Đường test | `https://kanban.akaine.io.vn` qua nginx (`curl --resolve ...:443:127.0.0.1 -k`); health chi tiết gọi thẳng `http://127.0.0.1:8000` |
 | Dữ liệu | Tự đăng ký `test-<ts>-a|b@example.test` + 6 tài khoản burst; `trap` tự xoá task → user |
-| Kết quả | **86 PASS / 0 FAIL**, `leftover_test_users=0` |
+| Kết quả | **108 PASS / 0 FAIL**, `leftover_test_users=0` |
 
 Không cần seed, không cần restart service, không còn bước reset limiter (app không giữ
 bộ đếm).
 
-> Đã chạy lại **sau khi tái cấu trúc repo** (2026-11-10): 86 PASS / 0 FAIL,
-> `leftover_test_users=0` — xác nhận đường dẫn mới `infra/test/app-tests.sh` hoạt động.
+> Đã chạy lại **sau migration + deploy schema GĐ C** (2026-11-10): 108 PASS / 0 FAIL,
+> `leftover_test_users=0` — bao gồm 22 case `position`/timestamp mới.
 
 ### Phạm vi
 
@@ -31,6 +31,7 @@ bộ đếm).
 | Scope theo session | 3 | `user_id` lệch → 403 `forbidden_user` |
 | Tạo + validate task | 7 | 201, title rỗng/201 ký tự/thiếu, body sai, `user_id` lệch |
 | PATCH | 11 | status, title, cả hai, thiếu field, status sai, 404 |
+| Position + timestamps | 22 | position tăng dần, reorder, append khi đổi cột, clamp, validate, `updated_at > created_at` |
 | Quyền sở hữu 2 session | 4 | user2 PATCH/DELETE task user1 → 404 |
 | DELETE query string | 6 | thiếu `user_id`, không phải số, xoá, xoá lại 404 |
 | Header + cookie | 9 | 5 security header, `Set-Cookie`, `HttpOnly`, `SameSite=Lax`, `Secure` |
@@ -51,7 +52,7 @@ Kỳ vọng cuối:
 
 ```text
 == summary ==
-pass=86 fail=0
+pass=108 fail=0
 leftover_test_users=0
 ```
 
@@ -86,6 +87,8 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 | Theme | `auto → light → dark → auto`; nền `rgb(251,250,247)` ↔ `rgb(22,21,19)` |
 | `N` / `/` | mở dialog thêm việc / focus tìm kiếm |
 | Thêm/sửa/chuyển/xoá | optimistic, toast, dialog xác nhận; lỗi thì hoàn tác |
+| Sắp thứ tự trong cột | nút `↑`/`↓` (ẩn tác dụng khi đang lọc) + kéo–thả; reload vẫn giữ thứ tự |
+| Chuyển cột `←`/`→` hoặc kéo | append cuối cột đích, `position` do server cấp |
 | Đăng xuất | về `/login`; `/api/me`, `/api/tasks` = 401 |
 | Console | 0 error |
 
@@ -98,7 +101,8 @@ Chi tiết + ảnh: [evidence/ui.md](evidence/ui.md).
 | `app-tests.md` | 46 | GĐ A: backend bền, rate limit, health 2 mức | lịch sử |
 | `app-tests-auth.md` | 67 | GĐ C: login/session, dùng seed | lịch sử |
 | `app-tests-register.md` | 82 | đăng ký công khai + rate limit 5/giờ | lịch sử |
-| `app-tests-nolimit.md` | **86** | bỏ toàn bộ rate limit, top bar mới, bỏ footer | **hiện tại** |
+| `app-tests-nolimit.md` | 86 | bỏ toàn bộ rate limit, top bar mới, bỏ footer | lịch sử |
+| `app-tests.sh` (+position/timestamps) | **108** | GĐ C schema: `position`, `created_at`, `updated_at` | **hiện tại** |
 
 Bộ cũ giữ trong git history (`6d3a2b7`); tóm tắt trong [evidence/api.md](evidence/api.md).
 
@@ -118,7 +122,7 @@ Bộ cũ giữ trong git history (`6d3a2b7`); tóm tắt trong [evidence/api.md]
 
 ## 5. Nguyên tắc khi sửa
 
-1. Sửa hành vi → chạy lại **toàn bộ** 86 case, không chỉ case liên quan.
+1. Sửa hành vi → chạy lại **toàn bộ** 108 case, không chỉ case liên quan.
 2. Sửa UI → chụp lại 8 ảnh + kiểm browser thật; bump `?v=` nếu đổi CSS/JS.
 3. Sửa schema → migration up/down + diễn tập rollback trong transaction + test.
 4. Test phải tự dọn dữ liệu (`trap`), kết thúc bằng `leftover_test_users=0`.

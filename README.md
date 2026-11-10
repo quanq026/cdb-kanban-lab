@@ -35,17 +35,17 @@ app/                        Runtime web app (deploy vào /opt/cdb/app)
   login.html                Trang đăng nhập
   register.html             Trang đăng ký
   app.css                   1 file CSS (design B, light/dark, responsive)
-  app.js                    1 file JS (board, auth, optimistic update, drag & drop)
+  app.js                    1 file JS (board, auth, optimistic update, drag & drop, reorder)
 
 infra/
-  db/schema.sql             users / tasks / index / seed
+  db/schema.sql             users / tasks (position + timestamps) / index / trigger / seed
   vm/                      01-provision → 02-deploy-app → 03-fix-tls
   local/                   01-init → 02-roles → 03-verify → 04-persistence → 05-backup-restore
   neon/                    01-restore → 02-verify
   https/                   01-acme → 02-cert → 03-nginx → 04-renew-hook → 05-hardening
   deploy/                  deploy.ps1, deploy-on-vm.sh, cdb-kanban.service, nginx conf
-  test/                    app-tests.sh (86 case), ui-shots.mjs (8 ảnh)
-  maintenance/             auth-*, purge-*, idle-check, sql/ (migration up/down)
+  test/                    app-tests.sh (108 case), ui-shots.mjs (8 ảnh)
+  maintenance/             auth-*, schema-*, purge-*, idle-check, sql/ (migration up/down)
   tools/run-remote.ps1     Copy script LF lên VM rồi chạy bằng sudo
 
 docs/
@@ -122,7 +122,7 @@ asset tĩnh (~4 h).
 - Session là cookie ký phía client; logout chỉ xoá cookie hiện tại. Muốn thu hồi toàn bộ
   phải đổi `APP_SECRET_KEY` rồi restart.
 - Chưa test mất toàn máy/PITR/failover; dump nằm cùng VM.
-- Schema còn lại của GĐ C (`tasks.position`, `created_at`, `updated_at`) **chưa làm** —
-  cần migration + rollback được duyệt trước.
+- Schema GĐ C đã đủ: `tasks.position`, `created_at`, `updated_at` + trigger
+  `trg_tasks_updated_at`; migration/rollback ở `infra/maintenance/sql/`.
 
 Danh sách đầy đủ ở [docs/security.md](docs/security.md) §9 và [docs/operations.md](docs/operations.md) §8.

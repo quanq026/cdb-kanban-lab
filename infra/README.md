@@ -7,7 +7,7 @@ working directory.
 
 | Thư mục | Script | Việc |
 |---|---|---|
-| `db/` | `schema.sql` | DDL `users`/`tasks`/index + seed lab |
+| `db/` | `schema.sql` | DDL `users`/`tasks` (position + timestamps)/index/trigger + seed lab |
 | `vm/` | `01-provision.sh` | swap 2 G, Docker, nginx, psql 17, venv |
 | | `02-deploy-app.sh` | deploy app lần đầu (file đã scp vào `/tmp/*`) |
 | | `03-fix-tls.sh` | trỏ `DB_SSLROOTCERT` sang CA bundle Ubuntu |
@@ -28,12 +28,15 @@ working directory.
 | | `cdb-kanban.service` | systemd unit |
 | | `nginx-cdb.conf` | reverse proxy :80/:443 |
 | | `nginx-cloudflare-realip.conf` | `set_real_ip_from` + `CF-Connecting-IP` |
-| `test/` | `app-tests.sh` | 86 case API, tự đăng ký/tự dọn |
+| `test/` | `app-tests.sh` | 108 case API, tự đăng ký/tự dọn |
 | | `ui-shots.mjs` | 8 ảnh UI qua Chrome CDP |
 | `maintenance/` | `auth-migrate.sh` | thêm `users.password_hash` (local + Neon) |
 | | `auth-rollback.sh` | drop cột `password_hash` |
 | | `auth-secret.sh` | thêm `APP_SECRET_KEY` nếu chưa có |
-| | `sql/2026-11-10-login*.sql` | DDL up/down chuẩn |
+| | `schema-migrate.sh` | thêm `tasks.position`/`created_at`/`updated_at` + index/trigger |
+| | `schema-rollback.sh` | drop 3 cột + trigger, trả index cũ |
+| | `sql/2026-11-10-login*.sql` | DDL up/down chuẩn (login) |
+| | `sql/2026-11-10-task-order*.sql` | DDL up/down chuẩn (position + timestamps) |
 | | `purge-neon-demo.sh` | backup rồi xoá user/task demo trên Neon |
 | | `purge-test-accounts.sh` | xoá `test-*`/`shot+*`/`verify+*` |
 | | `idle-check.sh` | đo cold start sau khi Neon scale-to-zero |
@@ -49,7 +52,8 @@ vm/02-deploy-app.sh → vm/03-fix-tls.sh
 https/01-acme.sh → 02-cert.sh → 03-nginx.sh → 04-renew-hook.sh → 05-hardening.sh
 ```
 
-Cập nhật app sau này chỉ cần `deploy/deploy.ps1`; migration dùng `maintenance/auth-*`.
+Cập nhật app sau này chỉ cần `deploy/deploy.ps1`; migration dùng
+`maintenance/auth-*` (login) và `maintenance/schema-*` (tasks).
 
 ## Quy ước
 

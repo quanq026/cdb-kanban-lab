@@ -1,7 +1,8 @@
 # Evidence — UI
 
-- Thời điểm: `2026-11-10`, sau deploy GĐ A + B + B+ + login/register + **bỏ rate limit,
-  top bar gọn, bỏ footer**; Neon đã purge demo.
+- Thời điểm: `2026-11-10`, sau deploy GĐ A + B + B+ + login/register + **schema GĐ C
+  (`position`, `created_at`, `updated_at`)**, bỏ rate limit, top bar gọn, bỏ footer;
+  Neon đã purge demo.
 - URL: `https://kanban.akaine.io.vn/` · `/login` · `/register`
 - Công cụ: Chrome headless qua CDP (`infra/test/ui-shots.mjs`), emulation đúng `width`,
   `mobile`, `prefers-color-scheme`.
@@ -22,11 +23,11 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 | `ui-login-light.png` | 19692 | true | `/login` | – | – | – | `rgb(251, 250, 247)` | 1440 |
 | `ui-register-light.png` | 23367 | true | `/register` | – | – | – | `rgb(251, 250, 247)` | 1440 |
 | `ui-empty-light.png` | 24036 | true | `/` | `0/0/0` | false | false | `rgb(251, 250, 247)` | 1440 |
-| `ui-desktop-light.png` | 25241 | true | `/` | `1/1/1` | false | false | `rgb(251, 250, 247)` | 1440 |
-| `ui-desktop-dark.png` | 25525 | true | `/` | `1/1/1` | false | false | `rgb(22, 21, 19)` | 1440 |
-| `ui-menu-light.png` | 31116 | true | `/` | `1/1/1` | true | false | `rgb(251, 250, 247)` | 1440 |
-| `ui-mobile-light.png` | 15100 | true | `/` | `1/1/1` | false | false | `rgb(251, 250, 247)` | 375 |
-| `ui-mobile-dark.png` | 15437 | true | `/` | `1/1/1` | false | false | `rgb(22, 21, 19)` | 375 |
+| `ui-desktop-light.png` | 25565 | true | `/` | `1/1/1` | false | false | `rgb(251, 250, 247)` | 1440 |
+| `ui-desktop-dark.png` | 25698 | true | `/` | `1/1/1` | false | false | `rgb(22, 21, 19)` | 1440 |
+| `ui-menu-light.png` | 31329 | true | `/` | `1/1/1` | true | false | `rgb(251, 250, 247)` | 1440 |
+| `ui-mobile-light.png` | 15179 | true | `/` | `1/1/1` | false | false | `rgb(251, 250, 247)` | 375 |
+| `ui-mobile-dark.png` | 15442 | true | `/` | `1/1/1` | false | false | `rgb(22, 21, 19)` | 375 |
 
 `hasFooter=false` ở mọi ảnh board/empty; `ui-menu-light.png` chụp menu avatar đang mở
 (email + `Đăng xuất`). `bg` khớp token design B: sáng `#fbfaf7`, tối `#161513`;
@@ -49,6 +50,7 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 - 1 accent teal `#0f766e` (dark `#2dd4bf`) + neutral ấm; token CSS cho light/dark.
 - Màu trạng thái: Todo xám, Doing cam `#c2761c`, Done xanh `#2f855a`; chip trên mỗi thẻ.
 - Radius 10–14 px, không viền cột, thẻ hover nâng nhẹ; drag có nghiêng/giảm opacity.
+- Mỗi thẻ có `↑`/`↓`/`←`/`→`/`✎`/`✕`; nút biên disabled, vẫn đủ nhỏ ở 375 px.
 - Avatar tròn mở menu (email + Đăng xuất); theme 3 trạng thái `auto → light → dark`.
 - Top bar 1 hàng desktop, 2 hàng mobile (search full width).
 - Motion 150–200 ms; `prefers-reduced-motion` tắt animation.
@@ -68,25 +70,51 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 | Thêm việc (`N`/nút) | dialog, submit disable khi gửi, 201, toast `Đã thêm việc` |
 | Sửa tiêu đề (`✎` → Enter) | PATCH `title` 200, chữ đổi tại chỗ |
 | Chuyển cột `→` | optimistic, PATCH 200, đếm cột + chip đổi |
-| Lọc | không khớp → 0 thẻ + empty state |
+| Sắp thứ tự `↑`/`↓` | optimistic, PATCH `{status, position}` 200; đổi chỗ trong cột, reload giữ nguyên |
+| Kéo–thả | thả giữa 2 thẻ → chèn đúng index (không chỉ đổi cột); thả vào cột khác → append |
+| Lọc | không khớp → 0 thẻ + empty state; reorder bị tạm tắt khi đang lọc |
 | `/` | focus ô tìm kiếm |
 | Xoá | `<dialog>` xác nhận `#55 — Việc kiểm thử đăng ký (Doing)` → DELETE 200, về 3 empty state |
 | Đăng xuất | 200 → `/login`; `/api/me`, `/api/tasks` 401 |
 | Đăng ký trùng email qua form | 409, inline `du lieu da ton tai` |
 | Console | **0 error** |
 
-## 5. Lỗi tìm thấy & sửa
+## 5. Kiểm tra reorder bằng browser headless (schema GĐ C)
+
+Script CDP tạm (cùng cơ chế `ui-shots.mjs`): đăng ký `shot+order<ts>@local.test`, tạo 3 việc
+`order a/b/c`, mở board, bấm `↑` trên task **c** 2 lần, rồi `→` để sang Doing, reload và
+đọc lại DOM.
+
+```json
+{
+  "ui_order_ok": true,
+  "ids": [76, 77, 78],
+  "before": [76, 77, 78],
+  "after_up": [78, 76, 77],
+  "doing": [78],
+  "persisted": { "todo": [76, 77], "doing": [78] },
+  "console_errors": 0
+}
+```
+
+- Thứ tự đổi đúng sau mỗi PATCH; reload vẫn giữ (server là nguồn sự thật).
+- Nút `↑`/`↓` disabled ở đầu/cuối cột; cảm ứng không cần kéo–thả.
+- Tài khoản `shot+*` được dọn bằng `purge-test-accounts.sh`; production về `users=1 tasks=0`.
+
+## 6. Lỗi tìm thấy & sửa
 
 - Banner `#slow` dùng `hidden` nhưng `.slow{display:flex}` đè UA → thêm
   `.slow[hidden]{display:none}`; chụp lại toàn bộ.
 - Cache asset: HTML mới + JS cũ → `TypeError: ... addEventListener of null`, board trắng.
-  Sửa `?v=20261110f` + origin `no-cache`; Cloudflare vẫn cache ~4 h → **luôn bump `?v=`**.
+  Sửa `?v=20261110f` + origin `no-cache`; Cloudflare vẫn cache ~4 h → **luôn bump `?v=`**
+  (bản schema GĐ C dùng `?v=20261110g`).
 - Test chuyển cột ngay sau lưu bị bỏ qua vì `busy` (guard double-submit) — hành vi đúng.
 - Script ảnh phải `Page.navigate` lại sau khi đăng ký/tạo task qua `fetch`.
 
-## 6. Ghi chú
+## 7. Ghi chú
 
-- Kéo–thả chuột dùng HTML5; cảm ứng dùng nút `←`/`→` (đề cho phép phương án thay thế).
+- Kéo–thả chuột dùng HTML5; cảm ứng/bàn phím dùng `↑`/`↓` để sắp trong cột và `←`/`→` để
+  đổi cột (đề cho phép phương án thay thế).
 - Ảnh là bằng chứng trực quan; số liệu/hành vi lấy từ DOM thật.
 - Bộ ảnh cũ (7 ảnh, có footer) đã bị thay; metadata cũ không còn trong `ui-shots.json`.
 - Mockup 2 phương án thiết kế: [../design/options.html](../design/options.html) ·

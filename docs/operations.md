@@ -57,7 +57,7 @@ Luồng:
    `/register`. Bất kỳ bước nào fail → `trap ERR` khôi phục backup và reload.
 
 **Bắt buộc:** mỗi lần sửa `app.css`/`app.js`, tăng `?v=` trong `app/index.html`,
-`app/login.html`, `app/register.html` (hiện `?v=20261110f`). Cloudflare cache asset ~4 h,
+`app/login.html`, `app/register.html` (hiện `?v=20261110g`). Cloudflare cache asset ~4 h,
 origin `no-cache` không đủ.
 
 Kiểm tra sau deploy:
@@ -129,24 +129,42 @@ Tắt đăng ký công khai: khôi phục `app.py`/`index.html`/`login.html` t�
 register, xoá `register.html`, restart. Dữ liệu demo (nếu thật sự cần) phục hồi từ
 `/home/azureuser/neon-demo-purge-2026-11-10-062210.sql` (xem [evidence/auth.md](evidence/auth.md)).
 
+### 3.5. Rollback schema tasks (GĐ C)
+
+```powershell
+powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-rollback.sh
+```
+
+Script chỉ trên bảng `tasks`: drop trigger + function, drop 3 cột mới, tạo lại
+`idx_tasks_user_status`; **không** đụng `users`/`password_hash`. App mới phải được rollback
+về bản cũ **trước** (hoặc cùng lúc) vì code mới đọc `position`/`created_at`/`updated_at`.
+
 ## 4. Migration database
 
-Chỉ có một migration tới nay: `users.password_hash` (GĐ C).
+Hai migration GĐ C, đều chạy giống local Docker và Neon bằng role owner:
+
+| Migration | Up / down | Runner |
+|---|---|---|
+| `users.password_hash` | `sql/2026-11-10-login.sql` / `...-login-rollback.sql` | `auth-migrate.sh` / `auth-rollback.sh` |
+| `tasks.position`, `created_at`, `updated_at` | `sql/2026-11-10-task-order.sql` / `...-task-order-rollback.sql` | `schema-migrate.sh` / `schema-rollback.sh` |
 
 ```powershell
 powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\auth-migrate.sh
-powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\auth-rollback.sh
+powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\schema-migrate.sh
 ```
 
-- SQL up/down: `infra/maintenance/sql/2026-11-10-login.sql`,
-  `...-login-rollback.sql`.
-- Script chạy DDL bằng role owner (local `postgres` / Neon owner từ `secrets.env`), áp dụng
-  **giống nhau** cho local docker và Neon.
-- `app_user` giữ nguyên quyền mức bảng; không cấp thêm.
+- `schema-migrate.sh` là **additive + idempotent**: thêm cột, backfill `position` theo `id`,
+  đặt `NOT NULL`/default, đổi index, tạo trigger `trg_tasks_updated_at`. App cũ vẫn chạy
+  được trong lúc migrate (INSERT cũ nhận `position` default 0).
+- Script tự kiểm tra `app_user` đọc/ghi được cột mới + trigger bằng một transaction
+  `INSERT/UPDATE ... ROLLBACK`, rồi in index/trigger thật.
+- `schema-rollback.sh` đã diễn tập trong transaction local:
+  up → `position_nulls=0`, index mới + trigger hiện diện → down → `down_columns=0`,
+  index cũ quay lại → `ROLLBACK` không để lại thay đổi.
+- `app_user` giữ nguyên quyền mức bảng; không cấp thêm. Trigger chạy không cần `EXECUTE`
+  riêng cho `app_user` (đã xác nhận bằng transaction ở trên).
 - Secret ký session: `infra/maintenance/auth-secret.sh` thêm `APP_SECRET_KEY` vào
   `/etc/cdb/app.env` nếu chưa có (không in giá trị).
-- Schema còn lại của GĐ C (`tasks.position`, `created_at`, `updated_at`) **chưa được
-  duyệt**; nếu làm phải có migration + rollback + test trước.
 
 ## 5. Backup, restore, purge
 
@@ -161,8 +179,9 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\auth-rollbac
 | Backup app | Tự động mỗi lần deploy: `/opt/cdb/app/backup-*` |
 | Backup Neon định kỳ | **Chưa bật** — Neon Free không có PITR dài; dump thủ công khi cần |
 
-Purge **không** đụng schema: `users`/`tasks`/`password_hash` giữ nguyên, chỉ xoá row.
-Production hiện `users=1` (tài khoản thật) `tasks=0`; local docker vẫn giữ seed 2 user / 5 task.
+Purge **không** đụng schema: `users`/`tasks` (kể cả `password_hash`, `position`, timestamp)
+giữ nguyên, chỉ xoá row. Production hiện `users=1` (tài khoản thật) `tasks=0`; local docker
+vẫn giữ seed 2 user / 5 task.
 
 ## 6. TLS & domain
 

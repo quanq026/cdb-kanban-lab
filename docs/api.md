@@ -27,10 +27,30 @@ Base URL: `https://kanban.akaine.io.vn`. Mọi response API là JSON; lỗi luô
 | GET | `/api/health` | – | `{status, db_user, ok}` — không lộ host/database/sslmode |
 | GET | `/api/health?detail=1` | chỉ `127.0.0.1`/`::1` | thêm `database`, `backend_addr`, `db_host`, `sslmode`; ngoài localhost → `403 forbidden` |
 | GET | `/api/users` | – | Chỉ trả chính user đang đăng nhập (giữ để tương thích UI cũ) |
-| GET | `/api/tasks?user_id=` | `user_id` khớp session | Danh sách task của user |
-| POST | `/api/tasks` | `{user_id, title}` | `201`, task mới ở `todo` |
-| PATCH | `/api/tasks/<id>` | `{user_id, status?, title?}` | `200`; phải có ít nhất một field |
+| GET | `/api/tasks?user_id=` | `user_id` khớp session | Danh sách task của user, sắp theo `position, id` |
+| POST | `/api/tasks` | `{user_id, title}` | `201`, task mới ở `todo`, append cuối cột (`position = max + 1`) |
+| PATCH | `/api/tasks/<id>` | `{user_id, status?, title?, position?}` | `200`; phải có ít nhất một field |
 | DELETE | `/api/tasks/<id>?user_id=` | query string, **không body** | `200`; SQL `WHERE id=%s AND user_id=%s` |
+
+Mỗi task trả đủ field:
+
+```json
+{
+  "id": 42,
+  "user_id": 7,
+  "title": "Việc mới",
+  "status": "todo",
+  "position": 0,
+  "created_at": "2026-11-10T07:45:00.123456+00:00",
+  "updated_at": "2026-11-10T07:45:00.123456+00:00"
+}
+```
+
+- `position` là thứ tự thủ công **trong từng cột** `(user_id, status)`, 0 = trên cùng.
+  Server giữ dãy liên tục `0..n-1` sau mỗi lần di chuyển; giá trị quá lớn bị kẹp về cuối cột.
+- `created_at` do `DEFAULT now()`; `updated_at` do trigger DB cập nhật ở mọi `UPDATE`.
+- Đổi `status` mà không gửi `position` → task append cuối cột đích.
+- Gửi `position` (kèm hoặc không kèm `status`) → chèn vào đúng index của cột đích.
 
 Ví dụ:
 
@@ -52,6 +72,7 @@ curl -sS -b jar -X POST https://kanban.akaine.io.vn/api/tasks \
 | `password` | 8–200 ký tự | `400 invalid_request` |
 | `title` | không rỗng/toàn khoảng trắng, ≤ 200 ký tự | `400 invalid_request` (hoặc `check_violation`) |
 | `status` | `todo` \| `doing` \| `done` | `400 invalid_request` |
+| `position` | số nguyên ≥ 0; lớn hơn độ dài cột → kẹp cuối | `400 invalid_request` |
 | `user_id` | số, tồn tại, khớp session | `400` / `403` / FK `400` |
 | `id` task | số, thuộc user | `404 not_found` |
 

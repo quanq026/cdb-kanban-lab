@@ -1,5 +1,5 @@
 {
-  "account": "shot+1794293880210@local.test",
+  "account": "shot+1794296774214@local.test",
   "shots": [
     {
       "file": "docs/evidence/images/ui-login-light.png",
@@ -40,7 +40,7 @@
     },
     {
       "file": "docs/evidence/images/ui-desktop-light.png",
-      "bytes": 25241,
+      "bytes": 25565,
       "ready": true,
       "meta": {
         "path": "/",
@@ -55,7 +55,7 @@
     },
     {
       "file": "docs/evidence/images/ui-desktop-dark.png",
-      "bytes": 25525,
+      "bytes": 25698,
       "ready": true,
       "meta": {
         "path": "/",
@@ -70,7 +70,7 @@
     },
     {
       "file": "docs/evidence/images/ui-menu-light.png",
-      "bytes": 31116,
+      "bytes": 31329,
       "ready": true,
       "meta": {
         "path": "/",
@@ -85,7 +85,7 @@
     },
     {
       "file": "docs/evidence/images/ui-mobile-light.png",
-      "bytes": 15100,
+      "bytes": 15179,
       "ready": true,
       "meta": {
         "path": "/",
@@ -100,7 +100,7 @@
     },
     {
       "file": "docs/evidence/images/ui-mobile-dark.png",
-      "bytes": 15437,
+      "bytes": 15442,
       "ready": true,
       "meta": {
         "path": "/",

@@ -1,7 +1,8 @@
 # Evidence — Auth, migration, purge
 
 Phạm vi: login/logout (GĐ C), đăng ký công khai, migration `users.password_hash`, purge dữ
-liệu demo. `tasks.position`/`created_at`/`updated_at` **chưa làm**.
+liệu demo. Schema `tasks.position`/`created_at`/`updated_at` đã làm — xem
+[schema.md](schema.md).
 
 ## 1. Thiết kế
 
@@ -175,8 +176,8 @@ psql "host=$NEON_HOST port=5432 dbname=studydb user=$NEON_OWNER_USER \
   -v ON_ERROR_STOP=1 -f /home/azureuser/neon-demo-purge-2026-11-10-062210.sql
 ```
 
-Purge không đụng schema: `users`/`tasks`/`password_hash` giữ nguyên, chỉ xoá row. Tải
-backup về trước khi xoá VM nếu muốn giữ.
+Purge không đụng schema: `users`/`tasks`/`password_hash`/`position`/timestamp giữ nguyên,
+chỉ xoá row. Tải backup về trước khi xoá VM nếu muốn giữ.
 
 ## 7. File liên quan
 

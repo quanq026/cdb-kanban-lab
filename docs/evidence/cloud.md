@@ -68,6 +68,9 @@ Bên trong transaction thấy `done`; sau `ROLLBACK` quay lại `doing`, không 
 
 ### 1.3. Index `idx_tasks_user_status (user_id, status)`
 
+> Số liệu dưới đây là **evidence lịch sử GĐ 2**. Sau migration GĐ C, index này được thay bằng
+> `idx_tasks_user_status_position (user_id, status, position)` — xem [schema.md](schema.md).
+
 Với bảng 5 dòng, planner chọn **Seq Scan** cả trước và sau khi tạo index (chi phí đọc toàn
 bảng thấp hơn):
 

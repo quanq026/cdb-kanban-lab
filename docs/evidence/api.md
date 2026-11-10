@@ -1,12 +1,13 @@
 # Evidence — API
 
-## 1. Bộ hiện tại — 86 PASS / 0 FAIL (2026-11-10)
+## 1. Bộ hiện tại — 108 PASS / 0 FAIL (2026-11-10)
 
 - Script: `infra/test/app-tests.sh`; chạy `sudo bash /tmp/app-tests.sh` trên VM.
 - Đường test: `https://kanban.akaine.io.vn` qua nginx (`curl --resolve ...:443:127.0.0.1 -k`);
   `?detail=1` gọi thẳng `http://127.0.0.1:8000`.
 - Không cần seed; tự đăng ký `test-<ts>-a|b@example.test` + 6 tài khoản burst; `trap` tự dọn.
-- Build: GĐ A + B + B+ + login/register, **bỏ toàn bộ rate limit**, top bar gọn, bỏ footer.
+- Build: GĐ A + B + B+ + login/register + **schema GĐ C** (`position`, `created_at`,
+  `updated_at`), bỏ toàn bộ rate limit, top bar gọn, bỏ footer.
 
 ### Tổng hợp
 
@@ -23,12 +24,13 @@
 | Scope theo session | 3 | 403 `forbidden_user` |
 | Tạo + validate | 7 | OK |
 | PATCH | 11 | status/title/404 |
+| Position + timestamps | 22 | reorder/append/clamp/ISO/`updated_at` |
 | Quyền sở hữu 2 session | 4 | 404 |
 | DELETE query string | 6 | OK |
 | Header + cookie flags | 9 | OK |
 | Logout | 2 | OK |
 | Burst ghi 70 POST | 3 | 70×400, 0×429, 0×5xx (kèm login lại) |
-| **Tổng** | **86** | **0 FAIL** |
+| **Tổng** | **108** | **0 FAIL** |
 
 ### Output thật
 
@@ -53,9 +55,9 @@ PASS | register body khong phai JSON -> 400           | 400
 
 == dang ky: tao tai khoan 1 (tu dong dang nhap) ==
 PASS | register user1 -> 201                          | 201
-PASS | register tra email                             | test-1794293754-a@example.test
+PASS | register tra email                             | test-1794297080-a@example.test
 PASS | register set session -> GET /api/me 200        | 200
-PASS | me.id = user1                                  | 42
+PASS | me.id = user1                                  | 83
 PASS | board user moi rong                            | 0
 PASS | GET /register (da dang nhap) -> 302            | 302
 
@@ -78,9 +80,9 @@ PASS | login sai code                                 | invalid_credentials
 PASS | login email la -> 401                          | 401
 PASS | login thieu password -> 400                    | 400
 PASS | login dung -> 200                              | 200
-PASS | login tra email                                | test-1794293754-a@example.test
+PASS | login tra email                                | test-1794297080-a@example.test
 PASS | GET /api/me -> 200                             | 200
-PASS | me.id = u1                                     | 42
+PASS | me.id = u1                                     | 83
 PASS | GET /api/users -> 200                          | 200
 PASS | users chi tra chinh minh                       | 1
 PASS | GET / (da dang nhap) -> 200                    | 200
@@ -101,7 +103,7 @@ PASS | 403 code                                       | forbidden_user
 
 == tao + validate ==
 PASS | POST task -> 201                               | 201
-id1=56
+id1=79
 PASS | POST title rong -> 400                         | 400
 PASS | empty title code                               | invalid_request
 PASS | POST title 201 ky tu -> 400                    | 400
@@ -113,9 +115,9 @@ PASS | POST user_id khac session -> 403               | 403
 PASS | PATCH status -> 200                            | 200
 PASS | PATCH status value                             | doing
 PASS | PATCH title -> 200                             | 200
-PASS | PATCH title value                              | api test renamed 1794293754
+PASS | PATCH title value                              | api test renamed 1794297080
 PASS | PATCH status+title -> 200                      | 200
-PASS | PATCH status+title value                       | both 1794293754
+PASS | PATCH status+title value                       | both 1794297080
 PASS | PATCH khong co field -> 400                    | 400
 PASS | PATCH status sai -> 400                        | 400
 PASS | PATCH title rong -> 400                        | 400
@@ -128,9 +130,33 @@ PASS | user2 PATCH task user1 -> 404                  | 404
 PASS | user2 DELETE task user1 -> 404                 | 404
 PASS | user1 van PATCH duoc task cua minh -> 200      | 200
 
+== position + timestamps ==
+PASS | POST order a -> 201                            | 201
+PASS | order a position = 0                           | 0
+PASS | POST tra du field                              | created_at,id,position,status,title,updated_at,user_id
+PASS | created_at ISO co tz                           | True
+PASS | POST order b -> 201                            | 201
+PASS | order b position = 1                           | 1
+PASS | POST order c -> 201                            | 201
+PASS | order c position = 2                           | 2
+PASS | GET tasks sau khi tao -> 200                   | 200
+PASS | todo order = a,b,c                             | 80,81,82
+PASS | PATCH position 0 -> 200                        | 200
+PASS | PATCH position value = 0                       | 0
+PASS | todo order sau reorder = c,a,b                 | 82,80,81
+PASS | PATCH status sang doing -> 200                 | 200
+PASS | chuyen cot append position = 0                 | 0
+PASS | PATCH title cap nhat updated_at -> 200         | 200
+PASS | updated_at > created_at                        | True
+PASS | PATCH position am -> 400                       | 400
+PASS | PATCH position khong phai so -> 400            | 400
+PASS | user2 PATCH position task user1 -> 404         | 404
+PASS | PATCH position lon -> 200                      | 200
+PASS | position lon bi clamp = 1                      | 1
+
 == delete (query string) ==
 PASS | DELETE thieu user_id -> 400                    | 400
-PASS | DELETE user_id khong phai so -> 400             | 400
+PASS | DELETE user_id khong phai so -> 400            | 400
 PASS | DELETE task cua minh -> 200                    | 200
 PASS | DELETE lai -> 404                              | 404
 PASS | GET tasks sau delete -> 200                    | 200
@@ -161,14 +187,17 @@ PASS | 70 POST lien tiep khong co 5xx                 | 0
 leftover_test_users=0
 
 == summary ==
-pass=86 fail=0
+pass=108 fail=0
 leftover_test_users=0
 ```
 
 - Tài khoản test chỉ tồn tại trong lúc chạy; script xoá task trước rồi user (FK).
 - Production sau chạy + purge: `users=1` (tài khoản thật), `tasks=0`; không còn
   `test-*`/`shot+*`/`verify+*`.
-- Chạy lại sau tái cấu trúc repo: cùng kết quả **86 PASS / 0 FAIL**.
+- Schema production sau migration: `id,user_id,title,status,position,created_at,updated_at`;
+  index `idx_tasks_user_status_position`; trigger `trg_tasks_updated_at`.
+- Chạy lại sau tái cấu trúc repo (86 case) và sau schema GĐ C (108 case) đều cùng kết quả
+  **PASS / 0 FAIL**.
 
 ## 2. Lịch sử các bộ test
 
@@ -177,7 +206,8 @@ leftover_test_users=0
 | `app-tests.md` | 46 | GĐ A: backend bền, rate limit ghi 60/phút | 140 POST → 99×400 + 41×429 |
 | `app-tests-auth.md` | 67 | GĐ C login, dùng seed `an@example.test` | 140 POST → 98×400 + 42×429 |
 | `app-tests-register.md` | 82 | đăng ký công khai + limit 5 tài khoản/giờ | 140 POST → 91×400 + 49×429 |
-| `app-tests-nolimit.md` | **86** | bỏ rate limit, top bar mới, bỏ footer | 6×201 đăng ký; 70×400 ghi; 0×429 |
+| `app-tests-nolimit.md` | 86 | bỏ rate limit, top bar mới, bỏ footer | 6×201 đăng ký; 70×400 ghi; 0×429 |
+| `app-tests.sh` (+schema) | **108** | `position`, `created_at`, `updated_at` | 6×201 đăng ký; 70×400 ghi; 0×429/5xx |
 
 Bộ 46/67/82 là lịch sử (giữ trong git `6d3a2b7`), không dùng làm tiêu chí hiện tại.
 

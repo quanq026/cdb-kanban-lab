@@ -15,6 +15,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATUSES = ("todo", "doing", "done")
+TASK_FIELDS = "id, user_id, title, status, position, created_at, updated_at"
 MAX_TITLE = 200
 MAX_PASSWORD = 200
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -44,10 +45,11 @@ CONN_INFO = {
     "user": _env("DB_USER"),
     "password": _env("DB_PASSWORD"),
     "sslmode": os.environ.get("DB_SSLMODE", "verify-full"),
-    "sslrootcert": os.environ.get("DB_SSLROOTCERT", "system"),
     "connect_timeout": 15,
     "application_name": "cdb-kanban",
 }
+if CONN_INFO["sslmode"].startswith("verify"):
+    CONN_INFO["sslrootcert"] = os.environ.get("DB_SSLROOTCERT", "system")
 
 pool = ConnectionPool(
     kwargs=CONN_INFO,
@@ -103,6 +105,64 @@ def q_one(sql, params=()):
                 raise
 
 
+def update_task_row(task_id, user_id, title=None, status=None, position=None):
+    """Cập nhật title/status/position, giữ thứ tự cột liên tục trong 1 transaction."""
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            if status is None and position is None:
+                cur.execute(
+                    "UPDATE tasks SET title = %s WHERE id = %s AND user_id = %s"
+                    " RETURNING " + TASK_FIELDS,
+                    (title, task_id, user_id),
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return row
+
+            cur.execute(
+                "SELECT id, status, position FROM tasks WHERE user_id = %s"
+                " ORDER BY position, id FOR UPDATE",
+                (user_id,),
+            )
+            rows = cur.fetchall()
+            current = next((r for r in rows if r["id"] == task_id), None)
+            if current is None:
+                return None
+
+            target_status = status or current["status"]
+            order = {
+                s: [r["id"] for r in rows if r["status"] == s and r["id"] != task_id]
+                for s in STATUSES
+            }
+            target = order[target_status]
+            index = len(target) if position is None else min(position, len(target))
+            target.insert(index, task_id)
+            affected = {current["status"], target_status}
+
+            cur.executemany(
+                "UPDATE tasks SET status = %s, position = %s"
+                " WHERE id = %s AND user_id = %s"
+                " AND (status IS DISTINCT FROM %s OR position IS DISTINCT FROM %s)",
+                [
+                    (s, pos, rid, user_id, s, pos)
+                    for s in STATUSES if s in affected
+                    for pos, rid in enumerate(order[s])
+                ],
+            )
+            if title is not None:
+                cur.execute(
+                    "UPDATE tasks SET title = %s WHERE id = %s AND user_id = %s",
+                    (title, task_id, user_id),
+                )
+            cur.execute(
+                "SELECT " + TASK_FIELDS + " FROM tasks WHERE id = %s AND user_id = %s",
+                (task_id, user_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return row
+
+
 def as_int(value, field):
     try:
         return int(value)
@@ -132,6 +192,25 @@ def clean_status(value):
     if value not in STATUSES:
         raise ValueError("status must be one of: " + ", ".join(STATUSES))
     return value
+
+
+def clean_position(value):
+    position = as_int(value, "position")
+    if position < 0:
+        raise ValueError("position must be >= 0")
+    return position
+
+
+def task_json(row):
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "title": row["title"],
+        "status": row["status"],
+        "position": row["position"],
+        "created_at": row["created_at"].isoformat(),
+        "updated_at": row["updated_at"].isoformat(),
+    }
 
 
 def clean_email(value):
@@ -348,10 +427,10 @@ def list_tasks():
     if denied:
         return denied
     rows = q_all(
-        "SELECT id, user_id, title, status FROM tasks WHERE user_id = %s ORDER BY id",
+        "SELECT " + TASK_FIELDS + " FROM tasks WHERE user_id = %s ORDER BY position, id",
         (user_id,),
     )
-    return jsonify(rows)
+    return jsonify([task_json(row) for row in rows])
 
 
 @app.post("/api/tasks")
@@ -363,11 +442,13 @@ def create_task():
         return denied
     title = clean_title(data.get("title"))
     row = q_one(
-        "INSERT INTO tasks (user_id, title) VALUES (%s, %s)"
-        " RETURNING id, user_id, title, status",
-        (user_id, title),
+        "INSERT INTO tasks (user_id, title, status, position)"
+        " SELECT %s, %s, 'todo', COALESCE(MAX(position), -1) + 1"
+        " FROM tasks WHERE user_id = %s AND status = 'todo'"
+        " RETURNING " + TASK_FIELDS,
+        (user_id, title, user_id),
     )
-    return jsonify(row), 201
+    return jsonify(task_json(row)), 201
 
 
 @app.patch("/api/tasks/<int:task_id>")
@@ -377,25 +458,18 @@ def update_task(task_id):
     denied = same_user(user_id)
     if denied:
         return denied
-    sets = []
-    params = []
-    if "status" in data:
-        sets.append("status = %s")
-        params.append(clean_status(data.get("status")))
-    if "title" in data:
-        sets.append("title = %s")
-        params.append(clean_title(data.get("title")))
-    if not sets:
+    has_title = "title" in data
+    has_status = "status" in data
+    has_position = "position" in data
+    if not (has_title or has_status or has_position):
         raise ValueError("nothing to update")
-    params.extend((task_id, user_id))
-    row = q_one(
-        "UPDATE tasks SET " + ", ".join(sets) + " WHERE id = %s AND user_id = %s"
-        " RETURNING id, user_id, title, status",
-        tuple(params),
-    )
+    title = clean_title(data.get("title")) if has_title else None
+    status = clean_status(data.get("status")) if has_status else None
+    position = clean_position(data.get("position")) if has_position else None
+    row = update_task_row(task_id, user_id, title=title, status=status, position=position)
     if row is None:
         return fail(404, "task not found for this user", "not_found")
-    return jsonify(row)
+    return jsonify(task_json(row))
 
 
 @app.delete("/api/tasks/<int:task_id>")

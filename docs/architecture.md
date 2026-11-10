@@ -58,16 +58,23 @@ erDiagram
         bigint user_id FK "NOT NULL → USERS.id"
         text title "NOT NULL, CHECK btrim(title) <> ''"
         text status "NOT NULL DEFAULT 'todo', CHECK IN ('todo','doing','done')"
+        integer position "NOT NULL DEFAULT 0, thứ tự trong (user_id, status)"
+        timestamptz created_at "NOT NULL DEFAULT now()"
+        timestamptz updated_at "NOT NULL DEFAULT now(), trigger khi UPDATE"
     }
     USERS ||--o{ TASKS : "sở hữu"
 ```
 
-- Index `idx_tasks_user_status (user_id, status)` phục vụ lọc theo user + cột Kanban.
+- Index `idx_tasks_user_status_position (user_id, status, position)` phục vụ lọc theo user +
+  cột Kanban và sắp thứ tự; thay index cũ `idx_tasks_user_status`.
 - FK `tasks.user_id → users.id`; xoá user phải xoá task trước (script test/purge làm đúng thứ tự).
 - `users.password_hash` thêm bằng migration GĐ C; nullable để user cũ vẫn hợp lệ nhưng
   không đăng nhập được cho tới khi có hash.
+- `tasks.position`/`created_at`/`updated_at` thêm bằng migration GĐ C (additive + idempotent)
+  và backfill `position` theo `id` hiện có; `updated_at` do trigger `trg_tasks_updated_at`.
 - DDL đầy đủ: `infra/db/schema.sql`. Migration up/down:
-  `infra/maintenance/sql/2026-11-10-login*.sql`.
+  `infra/maintenance/sql/2026-11-10-login*.sql` và
+  `infra/maintenance/sql/2026-11-10-task-order*.sql`.
 
 ### Vì sao `status` thay vì `done boolean`
 

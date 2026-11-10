@@ -20,7 +20,7 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
 | GĐ C | Login/logout | `users.password_hash` scrypt + session cookie |
 | GĐ C | Đăng ký + purge demo | `/api/register`, Neon sạch, 82 test |
 | GĐ C | Bỏ rate limit + top bar gọn + bỏ footer | 86 test, 8 ảnh |
-| GĐ C | Schema còn lại | **chưa làm**: `tasks.position`, `created_at`, `updated_at` |
+| GĐ C | Schema còn lại | `tasks.position`, `created_at`, `updated_at` + trigger; 108 test |
 
 ## 2. 2026-11-09 — dựng nền
 
@@ -127,7 +127,28 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
 - Test **86 PASS / 0 FAIL**; burst 6 đăng ký đều 201, 70 POST đều 400, không 429/5xx.
 - 8 ảnh mới gồm `ui-menu-light.png` (menu mở); production `users=1 tasks=0` (tài khoản thật).
 
-## 10. Lỗi đã gặp & cách sửa
+## 10. GĐ C schema — position + timestamps (07:35–08:05)
+
+- Migration `sql/2026-11-10-task-order.sql`: thêm `tasks.position integer NOT NULL DEFAULT 0`,
+  `created_at`/`updated_at timestamptz NOT NULL DEFAULT now()`; backfill `position` theo
+  `row_number() OVER (PARTITION BY user_id, status ORDER BY id)`; index mới
+  `idx_tasks_user_status_position`; trigger `trg_tasks_updated_at` (giữ `updated_at` ở DB).
+- Rollback `...-task-order-rollback.sql`: bỏ trigger/function/3 cột, tạo lại
+  `idx_tasks_user_status`. Diễn tập trong transaction local: up → `position_nulls=0`,
+  index/trigger OK → down → `down_columns=0`, index cũ OK → `ROLLBACK`.
+- API: task trả thêm `position`, `created_at`, `updated_at` (ISO 8601); GET sắp
+  `ORDER BY position, id`; POST append cuối `todo`; PATCH nhận `position`, đổi status thì
+  append cuối cột đích; renumber `0..n-1` trong một transaction có `FOR UPDATE`.
+- UI: kéo–thả đúng vị trí (không chỉ đổi cột) + nút `↑`/`↓` cho cảm ứng/bàn phím;
+  optimistic + rollback; tạm tắt reorder khi đang lọc. Asset `?v=20261110g`.
+- Migration chạy thật trên local Docker + Neon; app cũ vẫn healthy trong lúc migrate.
+  Deploy backup `backup-2026-11-10-074504`, health 3 mức OK.
+- Test **108 PASS / 0 FAIL** (`leftover_test_users=0`); browser headless xác nhận
+  `↑` ×2 đưa task cuối lên đầu, `→` sang Doing, reload vẫn giữ thứ tự, 0 console error.
+- Production sau purge: `users=1 tasks=0`; schema `id,user_id,title,status,position,created_at,updated_at`,
+  index mới + trigger hiện diện.
+
+## 11. Lỗi đã gặp & cách sửa
 
 | # | Lỗi | Nguyên nhân | Cách sửa |
 |---:|---|---|---|
@@ -149,11 +170,11 @@ Nhật ký các mốc, quyết định và lỗi thực tế. Output chi tiết 
 | 16 | `521` Cloudflare | origin không có 443 | ACME + cert + nginx 443 |
 | 17 | `http2 on;` unknown directive | nginx 1.24 | `listen 443 ssl http2;` |
 | 18 | 500 thoáng qua khi Neon suspend | `AdminShutdown` | pool check + reconnect_timeout + retry |
+| 19 | Local test 503 `PoolTimeout` | `sslmode=disable` vẫn kèm `sslrootcert=system` | chỉ thêm `sslrootcert` khi `sslmode` bắt đầu bằng `verify` |
+| 20 | UI check báo reorder sai | test bấm `↑` trên "card cuối" sau mỗi lần → trả về thứ tự cũ | bấm theo `data-id` của task mục tiêu |
 
-## 11. Việc chưa làm
+## 12. Việc chưa làm
 
-- GĐ C schema còn lại: `tasks.position`, `created_at`, `updated_at` — **chờ duyệt**; cần
-  migration + rollback + test, không tự ý làm.
 - Chưa có đổi/quên mật khẩu, xác thực email, CAPTCHA/2FA, khoá tài khoản.
 - Chưa có rate limit (đã bỏ theo yêu cầu).
 - Chưa test mất máy/PITR/failover; chưa backup định kỳ ngoài VM.

@@ -4,10 +4,11 @@ Bằng chứng thật của lab: lệnh đã chạy + output đo được. Ảnh
 
 | File | Nội dung |
 |---|---|
-| [api.md](api.md) | Bộ test API hiện tại 86 case + lịch sử 46/67/82 case, burst, dọn tài khoản |
-| [ui.md](ui.md) | 8 ảnh UI (1440/375, light/dark), metadata, kiểm tra browser thật |
+| [api.md](api.md) | Bộ test API hiện tại **108 case** (+22 case `position`/timestamp) + lịch sử 46/67/82/86, burst, dọn tài khoản |
+| [ui.md](ui.md) | 8 ảnh UI (1440/375, light/dark), metadata, kiểm tra reorder bằng browser thật |
 | [cloud.md](cloud.md) | Postgres local (constraints, transaction, index, persistence, backup/restore), Neon, monitoring, cost |
 | [auth.md](auth.md) | Migration login, ma trận lỗi, session, purge demo + đăng ký công khai |
+| [schema.md](schema.md) | Migration `tasks.position`/`created_at`/`updated_at`, index, trigger, rollback diễn tập |
 | [https.md](https.md) | Domain, cert Let's Encrypt, TLS, Cloudflare settings, security header |
 
 ## Tái tạo
@@ -37,8 +38,9 @@ powershell -File infra\tools\run-remote.ps1 -Path infra\maintenance\purge-test-a
 |---|---|
 | Ngày | 2026-11-09 → 2026-11-10 |
 | Web | `https://kanban.akaine.io.vn/` |
-| API test | 86 PASS / 0 FAIL, `leftover_test_users=0` |
+| API test | 108 PASS / 0 FAIL, `leftover_test_users=0` |
 | Production DB | `users=1` (tài khoản thật), `tasks=0` |
-| Local DB | `users=2`, `tasks=5` (seed lab) |
-| Build asset | `?v=20261110f` |
+| Production schema | `id,user_id,title,status,position,created_at,updated_at`; index `idx_tasks_user_status_position`; trigger `trg_tasks_updated_at` |
+| Local DB | `users=2`, `tasks=5` (seed lab, đã backfill `position`) |
+| Build asset | `?v=20261110g` |
 | Cert | `CN=kanban.akaine.io.vn`, hạn 2027-02-07 |

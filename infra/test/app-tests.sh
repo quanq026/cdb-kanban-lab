@@ -95,6 +95,10 @@ juser() {
   python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["user"][sys.argv[2]])' "$BODY" "$1"
 }
 
+jids() {
+  python3 -c 'import json,sys;print(",".join(str(t["id"]) for t in json.load(open(sys.argv[1])) if t["status"]==sys.argv[2]))' "$BODY" "$1"
+}
+
 echo
 echo "== chua dang nhap =="
 code=$(call GET /api/tasks "")
@@ -252,6 +256,46 @@ code=$(call DELETE "/api/tasks/$ID1?user_id=$u2" "$JAR2")
 check "user2 DELETE task user1 -> 404" 404 "$code"
 code=$(callj PATCH "/api/tasks/$ID1" "$JAR1" "{\"user_id\":$u1,\"status\":\"done\"}")
 check "user1 van PATCH duoc task cua minh -> 200" 200 "$code"
+
+echo
+echo "== position + timestamps =="
+code=$(callj POST /api/tasks "$JAR1" "{\"user_id\":$u1,\"title\":\"order a $STAMP\"}")
+check "POST order a -> 201" 201 "$code"
+T2=$(jget id)
+check "order a position = 0" 0 "$(jget position)"
+check "POST tra du field" "created_at,id,position,status,title,updated_at,user_id" "$(jkeys)"
+check "created_at ISO co tz" "True" "$(python3 -c 'import datetime,json;print(datetime.datetime.fromisoformat(json.load(open("/tmp/cdb-test-body.json"))["created_at"]).tzinfo is not None)')"
+code=$(callj POST /api/tasks "$JAR1" "{\"user_id\":$u1,\"title\":\"order b $STAMP\"}")
+check "POST order b -> 201" 201 "$code"
+T3=$(jget id)
+check "order b position = 1" 1 "$(jget position)"
+code=$(callj POST /api/tasks "$JAR1" "{\"user_id\":$u1,\"title\":\"order c $STAMP\"}")
+check "POST order c -> 201" 201 "$code"
+T4=$(jget id)
+check "order c position = 2" 2 "$(jget position)"
+code=$(call GET "/api/tasks?user_id=$u1" "$JAR1")
+check "GET tasks sau khi tao -> 200" 200 "$code"
+check "todo order = a,b,c" "$T2,$T3,$T4" "$(jids todo)"
+code=$(callj PATCH "/api/tasks/$T4" "$JAR1" "{\"user_id\":$u1,\"position\":0}")
+check "PATCH position 0 -> 200" 200 "$code"
+check "PATCH position value = 0" 0 "$(jget position)"
+code=$(call GET "/api/tasks?user_id=$u1" "$JAR1")
+check "todo order sau reorder = c,a,b" "$T4,$T2,$T3" "$(jids todo)"
+code=$(callj PATCH "/api/tasks/$T2" "$JAR1" "{\"user_id\":$u1,\"status\":\"doing\"}")
+check "PATCH status sang doing -> 200" 200 "$code"
+check "chuyen cot append position = 0" 0 "$(jget position)"
+code=$(callj PATCH "/api/tasks/$T3" "$JAR1" "{\"user_id\":$u1,\"title\":\"order b renamed $STAMP\"}")
+check "PATCH title cap nhat updated_at -> 200" 200 "$code"
+check "updated_at > created_at" "True" "$(python3 -c 'import datetime,json;d=json.load(open("/tmp/cdb-test-body.json"));print(datetime.datetime.fromisoformat(d["updated_at"])>datetime.datetime.fromisoformat(d["created_at"]))')"
+code=$(callj PATCH "/api/tasks/$T3" "$JAR1" "{\"user_id\":$u1,\"position\":-1}")
+check "PATCH position am -> 400" 400 "$code"
+code=$(callj PATCH "/api/tasks/$T3" "$JAR1" "{\"user_id\":$u1,\"position\":\"abc\"}")
+check "PATCH position khong phai so -> 400" 400 "$code"
+code=$(callj PATCH "/api/tasks/$T3" "$JAR2" "{\"user_id\":$u2,\"position\":0}")
+check "user2 PATCH position task user1 -> 404" 404 "$code"
+code=$(callj PATCH "/api/tasks/$T3" "$JAR1" "{\"user_id\":$u1,\"position\":999}")
+check "PATCH position lon -> 200" 200 "$code"
+check "position lon bi clamp = 1" 1 "$(jget position)"
 
 echo
 echo "== delete (query string) =="
