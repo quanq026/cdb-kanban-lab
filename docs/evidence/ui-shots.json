@@ -1,0 +1,117 @@
+{
+  "account": "shot+1794293880210@local.test",
+  "shots": [
+    {
+      "file": "docs/evidence/images/ui-login-light.png",
+      "bytes": 19692,
+      "ready": true,
+      "meta": {
+        "path": "/login",
+        "scheme": "light",
+        "bg": "rgb(251, 250, 247)",
+        "width": 1440
+      }
+    },
+    {
+      "file": "docs/evidence/images/ui-register-light.png",
+      "bytes": 23367,
+      "ready": true,
+      "meta": {
+        "path": "/register",
+        "scheme": "light",
+        "bg": "rgb(251, 250, 247)",
+        "width": 1440
+      }
+    },
+    {
+      "file": "docs/evidence/images/ui-empty-light.png",
+      "bytes": 24036,
+      "ready": true,
+      "meta": {
+        "path": "/",
+        "counts": "0/0/0",
+        "avatar": "s",
+        "menuOpen": false,
+        "hasFooter": false,
+        "scheme": "light",
+        "bg": "rgb(251, 250, 247)",
+        "width": 1440
+      }
+    },
+    {
+      "file": "docs/evidence/images/ui-desktop-light.png",
+      "bytes": 25241,
+      "ready": true,
+      "meta": {
+        "path": "/",
+        "counts": "1/1/1",
+        "avatar": "s",
+        "menuOpen": false,
+        "hasFooter": false,
+        "scheme": "light",
+        "bg": "rgb(251, 250, 247)",
+        "width": 1440
+      }
+    },
+    {
+      "file": "docs/evidence/images/ui-desktop-dark.png",
+      "bytes": 25525,
+      "ready": true,
+      "meta": {
+        "path": "/",
+        "counts": "1/1/1",
+        "avatar": "s",
+        "menuOpen": false,
+        "hasFooter": false,
+        "scheme": "dark",
+        "bg": "rgb(22, 21, 19)",
+        "width": 1440
+      }
+    },
+    {
+      "file": "docs/evidence/images/ui-menu-light.png",
+      "bytes": 31116,
+      "ready": true,
+      "meta": {
+        "path": "/",
+        "counts": "1/1/1",
+        "avatar": "s",
+        "menuOpen": true,
+        "hasFooter": false,
+        "scheme": "light",
+        "bg": "rgb(251, 250, 247)",
+        "width": 1440
+      }
+    },
+    {
+      "file": "docs/evidence/images/ui-mobile-light.png",
+      "bytes": 15100,
+      "ready": true,
+      "meta": {
+        "path": "/",
+        "counts": "1/1/1",
+        "avatar": "s",
+        "menuOpen": false,
+        "hasFooter": false,
+        "scheme": "light",
+        "bg": "rgb(251, 250, 247)",
+        "width": 375
+      }
+    },
+    {
+      "file": "docs/evidence/images/ui-mobile-dark.png",
+      "bytes": 15437,
+      "ready": true,
+      "meta": {
+        "path": "/",
+        "counts": "1/1/1",
+        "avatar": "s",
+        "menuOpen": false,
+        "hasFooter": false,
+        "scheme": "dark",
+        "bg": "rgb(22, 21, 19)",
+        "width": 375
+      }
+    }
+  ]
+}

@@ -1,7 +1,10 @@
-.env
 .env*
 *.dump
 *.pem
-__pycache__/
+*.pyc
+**/__pycache__/
 .venv/
+node_modules/
+.DS_Store
+Thumbs.db
 login-azure.ps1
