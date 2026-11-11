@@ -74,3 +74,9 @@ Container ứng dụng (`cdb-app`) được cấu hình nghiêm ngặt trong `do
 - **Phân quyền người dùng**:
   - Mọi thao tác CRUD task đều kiểm tra `user_id` có khớp với `session.uid` hay không qua hàm `same_user()`.
   - Thao tác trên task của user khác hoặc task không tồn tại đều trả về `404 Not Found` để không lộ ID hay sự tồn tại của dữ liệu.
+
+---
+
+## 7. Vai trò người dùng Database & Đánh đổi
+
+Container DB trong Docker Compose đặt `POSTGRES_USER=app_user` nên ứng dụng kết nối và chạy bằng role superuser của cơ sở dữ liệu nội bộ này. Đây là đánh đổi có chủ ý nhằm giữ cho bản demo tinh gọn và khởi tạo tự động thuận tiện nhất. Nếu dùng cơ sở dữ liệu bên ngoài hoặc triển khai với dữ liệu thật, bạn nên cấu hình một role riêng áp dụng nguyên tắc quyền hạn tối thiểu (least-privilege, chỉ cấp quyền CRUD trên bảng, không cấp quyền superuser hay tạo database/role).
