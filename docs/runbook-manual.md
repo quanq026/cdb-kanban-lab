@@ -17,14 +17,31 @@ Postgres server hay container DB.
 docker ps -a --filter name=cdb-study
 ```
 
+- [ ] Chuẩn bị DSN của container lab (mật khẩu thật, không dán vào repo):
+
+```bash
+export LAB_DSN='postgresql://postgres:<lab-password>@127.0.0.1:55432/studydb?sslmode=disable'
+```
+
+- [ ] Trên VM đã cài `awscli` (hoặc `rclone`) và cấu hình endpoint/bucket:
+
+```bash
+aws --version
+aws s3 ls "s3://<bucket>/" --endpoint-url "https://<account-id>.r2.cloudflarestorage.com"
+```
+
 - [ ] Dump dữ liệu lab ra ngoài VM (bucket riêng, không để trong repo):
 
 ```bash
 pg_dump -Fc "$LAB_DSN" -f /tmp/cdb-lab.dump
 test -s /tmp/cdb-lab.dump || { echo "dump rong, dung lai"; exit 1; }
-aws s3 cp /tmp/cdb-lab.dump "s3://<bucket>/cdb-lab/$(date +%F).dump" \
-  --endpoint-url "https://<account-id>.r2.cloudflarestorage.com"
-rm -f /tmp/cdb-lab.dump
+if aws s3 cp /tmp/cdb-lab.dump "s3://<bucket>/cdb-lab/$(date +%F).dump" \
+  --endpoint-url "https://<account-id>.r2.cloudflarestorage.com"; then
+  rm -f /tmp/cdb-lab.dump
+else
+  echo "upload loi: giu /tmp/cdb-lab.dump de thu lai"
+  exit 1
+fi
 ```
 
 - [ ] Xoá container và volume:

@@ -97,6 +97,8 @@ psql "$DSN" -v ON_ERROR_STOP=1 -f infra/migrations/2026-11-10-task-order.sql
 đặt `NOT NULL`/default, đổi index, tạo trigger `trg_tasks_updated_at`. Bản rollback chỉ
 đụng bảng `tasks`, không đụng `users`.
 
+`infra/setup/schema.sql` có seed dữ liệu mẫu và không idempotent — chỉ áp lên DB trống.
+
 ## 5. Backup & restore
 
 | Việc | Cách làm |

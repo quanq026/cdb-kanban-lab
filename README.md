@@ -62,10 +62,10 @@ docs/
 
 ## Chạy local
 
-Yêu cầu: Python 3.12+ và **một Neon branch riêng cho dev** (không dùng chung branch
-production, không trỏ dev vào DB production).
+Yêu cầu: Python 3.12+ và **Neon branch schema-only** cho dev. Không dùng branch copy từ
+`main` có dữ liệu: branch đó chứa email và password hash production.
 
-1. Trong Neon: `Branches → New branch` từ `main`, đặt tên `dev-<tên>`, rồi lấy host,
+1. Neon: `Branches → New branch`, chọn `Schema only`, đặt tên `dev-<tên>`, rồi lấy host,
    role và password của branch đó.
 2. Điền `.env`:
 
@@ -78,7 +78,7 @@ cp .env.example .env
 # DB_SSLMODE=verify-full
 ```
 
-3. Cài dependency, áp schema một lần cho branch mới, chạy app:
+3. Cài dependency và chạy app (branch schema-only đã có bảng, không cần áp `schema.sql`):
 
 ```bash
 python -m venv .venv
@@ -87,15 +87,19 @@ python -m venv .venv
 pip install -r app/requirements.txt
 
 set -a; . ./.env; set +a
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/setup/schema.sql
 gunicorn --chdir app --bind 127.0.0.1:8000 app:app
 ```
 
+Nếu dùng project/DB trống thay vì branch schema-only, áp schema một lần:
+`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/setup/schema.sql` — file này có seed và
+không idempotent, chỉ áp lên DB trống.
+
 `DATABASE_URL` chỉ dùng cho `psql`, dạng
-`postgresql://<role>:<password>@<host>/studydb?sslmode=verify-full`.
+`postgresql://<role>:<password>@<host>/studydb?sslmode=verify-full`. Password có ký tự đặc
+biệt phải URL-encode trong URL (`@` → `%40`, `:` → `%3A`, `/` → `%2F`); `DB_PASSWORD` giữ
+nguyên, không encode.
 
 Mở <http://127.0.0.1:8000/>. App đọc biến trực tiếp từ process env, không tự nạp `.env`.
-Tuỳ chọn tạm nếu không dùng Neon: `docker run ... postgres:17` (đặt `DB_SSLMODE=disable`).
 
 ## CI/CD
 
