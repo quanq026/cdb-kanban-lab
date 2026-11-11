@@ -11,6 +11,7 @@
 ## Bắt đầu nhanh
 
 **Yêu cầu:** VPS (Ubuntu/Debian) đã cài Docker & Docker Compose, 1 domain trỏ về IP VPS.
+*(Nếu là VPS mới chưa cài Docker, bạn có thể cài nhanh bằng lệnh: `curl -fsSL https://get.docker.com | sh`)*
 
 ### 4 bước triển khai:
 1. Clone repo: `git clone <repo-url> && cd cdb-kanban-lab`
