@@ -39,9 +39,10 @@
 - `.gitignore` chặn `.env*` (trừ `.env.example`), `*.dump`, `*.pem`, `__pycache__/`, `.venv/`.
 - Không file SQL/script nào chứa secret; không in secret ra output.
 - `APP_SECRET_KEY` đổi = mọi session cũ mất hiệu lực.
-- Backup: `NEON_BACKUP_DSN` (role owner), token R2 riêng cho bucket backup và
-  `RESTORE_TEST_DSN` nằm trong GitHub Environment `backup`, không có trên VM. Token R2 chỉ
-  cấp quyền object read/write trên đúng bucket đó; không dùng token toàn account.
+- Backup: `NEON_BACKUP_DSN` (role owner), endpoint R2, bucket và API token
+  (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) nằm trong GitHub repository secrets, không
+  có trên VM. Token R2 chỉ cấp quyền object read/write trên đúng bucket đó; không dùng token
+  toàn account.
 
 ## 5. TLS & edge
 
@@ -97,7 +98,7 @@ App **không** có rate limiter. Hệ quả:
 - Không rate limit (mục 6); không CAPTCHA/2FA/xác thực email.
 - Session client-side: logout không thu hồi cookie đã copy.
 - Chưa diễn tập mất toàn máy/failover/PITR. Backup logical dump hằng ngày lên R2
-  (RPO ≤ 24 h) + restore test hằng tuần vào DB tạm.
+  (RPO ≤ 24 h), retention 30 ngày qua R2 lifecycle rule.
 - HSTS 180 ngày: browser đã truy cập vẫn ép HTTPS kể cả khi rollback.
 - Cert phụ thuộc `certbot.timer`; VM tắt quá lâu có thể hết hạn.
 - CSP không cho inline script/style.

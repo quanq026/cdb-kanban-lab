@@ -71,30 +71,32 @@ pg_lsclusters 2>/dev/null || echo "no local cluster"
 Workflow `backup.yml` chạy trên GitHub-hosted runner; repo không tự tạo bucket hay secret.
 
 - [ ] Tạo bucket R2 riêng cho backup (ví dụ `cdb-backup`), **không** public.
+- [ ] Cấu hình Lifecycle Rule trong Cloudflare R2 Console để retention 30 ngày:
+      1. Vào Cloudflare Dashboard → **R2** → chọn bucket backup (`cdb-backup`).
+      2. Chuyển sang tab **Settings** → cuộn xuống phần **Lifecycle Rules** → bấm **Add rule**.
+      3. Điền Rule name: `expire-30-days`, Prefix: `cdb/` (hoặc để trống), chọn **Delete uploaded objects** sau `30` ngày.
+      4. Bấm **Save rule**.
 - [ ] Tạo R2 API token quyền tối thiểu: Object Read & Write, giới hạn trong đúng bucket đó.
       Ghi lại endpoint `https://<account-id>.r2.cloudflarestorage.com`.
-- [ ] (Tuỳ chọn, lưới an toàn thứ hai) Lifecycle rule xoá object sau 30 ngày — script đã
-      prune còn 14 bản, rule này chỉ dọn rác nếu script chết giữa đường.
-- [ ] Tạo GitHub Environment `backup` (Settings → Environments), thêm secrets:
-      `NEON_BACKUP_DSN`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
-      `R2_SECRET_ACCESS_KEY`, `RESTORE_TEST_DSN`; tuỳ chọn `NOTIFY_WEBHOOK`.
-      `NEON_BACKUP_DSN` dùng role owner và **endpoint trực tiếp** của Neon (không phải
-      host `-pooler`), vì dump + counts dùng chung một exported snapshot.
-- [ ] Tạo Neon branch tạm cho restore test, lấy host của branch; trong branch đó chạy
-      `CREATE DATABASE restoretest;` rồi đặt `RESTORE_TEST_DSN` trỏ database `restoretest`
-      (script từ chối nếu host trùng hoặc tên database trùng production).
+- [ ] Thêm GitHub Repository Secrets (Settings → Secrets and variables → Actions):
+      `NEON_BACKUP_DSN`, `R2_ENDPOINT`, `R2_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
 - [ ] Chạy lần đầu để xác nhận:
 
 ```bash
-gh workflow run backup.yml --ref main -f restore_test=true
+gh workflow run backup.yml --ref main
 gh run watch
 ```
 
-- [ ] Kiểm tra object trên R2: có `cdb-<stamp>.dump` và `cdb-<stamp>.json` dưới prefix `cdb/`.
-- [ ] Điền kết quả diễn tập thật: đã restore thử ngày `____`, kết quả `____`,
-      thời gian restore `____` phút (dùng để cập nhật RTO trong `operations.md`).
-- [ ] (Sau khi xác nhận) đặt required reviewer cho Environment `backup` nếu muốn chặn chạy
-      backup/restore ngoài ý muốn.
+- [ ] Kiểm tra object trên R2: có `cdb-<stamp>.dump` dưới prefix `cdb/`.
+- [ ] Thử restore thật một lần vào Neon branch tạm để kiểm chứng:
+      1. Tạo branch mới từ main trên Neon console.
+      2. Tải bản dump từ R2 và restore:
+
+```bash
+aws --endpoint-url "$R2_ENDPOINT" s3 cp "s3://$R2_BUCKET/cdb/cdb-<stamp>.dump" ./restore.dump
+pg_restore --no-owner -d "$RESTORE_BRANCH_DSN" ./restore.dump
+rm -f ./restore.dump
+```
 
 ### 2.1. Giữ schedule sống (60 ngày)
 
@@ -114,8 +116,6 @@ curl -fsS -X POST \
   "https://api.github.com/repos/<owner>/<repo>/actions/workflows/backup.yml/dispatches" \
   -d '{"ref":"main"}'
 ```
-
-- [ ] Kiểm tra job `Check latest dump age`: xanh nghĩa là bản `.dump` mới nhất ≤ 36 giờ.
 
 ## 3. Cutover systemd/venv → Docker (làm **trước** khi merge PR Docker)
 
