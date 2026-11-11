@@ -1,5 +1,5 @@
 -- Migration GĐ C (login): thêm hash mật khẩu cho user.
--- Chạy giống hệt trên local (docker cdb-study) và Neon (studydb).
+-- Chạy giống hệt trên Postgres local và Neon (studydb).
 BEGIN;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;

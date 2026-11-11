@@ -1,5 +1,5 @@
 -- Migration GĐ C (schema): thứ tự thủ công + mốc thời gian cho tasks.
--- Chạy giống hệt trên local (docker cdb-study) và Neon (studydb).
+-- Chạy giống hệt trên Postgres local và Neon (studydb).
 -- Additive + idempotent: app cũ vẫn chạy được trong lúc migrate.
 BEGIN;
 

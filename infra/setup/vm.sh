@@ -10,7 +10,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-APP_USER=azureuser
+APP_USER="${APP_USER:-${SUDO_USER:-$(id -un)}}"
 APP_DIR=/opt/cdb/app
 VENV=/opt/cdb/venv
 ENV_FILE=/etc/cdb/app.env
@@ -46,17 +46,24 @@ systemctl enable --now nginx >/dev/null 2>&1
 usermod -aG docker "$APP_USER"
 
 # 5. App dirs and Python venv.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REQ="$HERE/../../app/requirements.txt"
 install -d -o "$APP_USER" -g "$APP_USER" "$APP_DIR"
 install -d -m 700 /etc/cdb
 if [ ! -x "$VENV/bin/python" ]; then
   python3 -m venv "$VENV"
 fi
+if [ ! -f "$REQ" ]; then
+  echo "requirements not found: $REQ (run from a repo checkout)" >&2
+  exit 2
+fi
 "$VENV/bin/pip" install --quiet --upgrade pip
-"$VENV/bin/pip" install --quiet flask gunicorn "psycopg[binary,pool]"
+"$VENV/bin/pip" install --quiet -r "$REQ"
 
 # 6. App environment (DB credentials) from the owner-only secrets file.
 if [ -f "$SECRETS" ]; then
   set -a
+  # shellcheck source=/dev/null
   . "$SECRETS"
   set +a
   umask 077
@@ -77,15 +84,15 @@ else
 fi
 
 # 7. systemd unit.
-cat > "$UNIT" <<'UNIT'
+cat > "$UNIT" <<UNIT
 [Unit]
 Description=CDB Kanban (Flask + gunicorn)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=azureuser
-Group=azureuser
+User=$APP_USER
+Group=$APP_USER
 WorkingDirectory=/opt/cdb/app
 EnvironmentFile=/etc/cdb/app.env
 ExecStart=/opt/cdb/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 --timeout 30 --access-logfile - --error-logfile - app:app

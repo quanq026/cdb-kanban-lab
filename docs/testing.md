@@ -6,8 +6,8 @@
 |---|---|
 | Workflow | `.github/workflows/ci.yml` (push/PR `main`, `workflow_dispatch`) |
 | Runner | `ubuntu-latest` + service `postgres:17`, DB `studydb` |
-| Chuẩn bị | apply `infra/setup/schema.sql`, tạo `app_user` LOGIN least-privilege (assert `rolsuper=f`) |
-| Syntax | `py_compile app/app.py .github/scripts/ci-smoke.py`, `node --check app/app.js`, `bash -n infra/ops/deploy.sh` |
+| Chuẩn bị | cài `app/requirements.txt`, apply `infra/setup/schema.sql`, tạo `app_user` LOGIN least-privilege (assert `rolsuper=f`) |
+| Static | `py_compile`, `node --check app/app.js`, `bash -n` + `shellcheck`, `ruff check app .github/scripts` |
 | Test | `python .github/scripts/ci-smoke.py` — **57 PASS / 0 FAIL** |
 
 `ci-smoke.py` dùng Flask test client (không cần gunicorn/nginx): auth 401/302, register
@@ -16,10 +16,10 @@ validate (title rỗng/201 ký tự, status sai, position âm, thiếu field), t
 (`updated_at` tăng, `created_at` giữ), delete 200/404, logout/login, health 2 mức, và
 tự dọn `ci-*` (kết thúc `no leftover ci-* users`).
 
-Chạy local (cần Postgres đã apply schema):
+Chạy local (cần Postgres đã apply schema và env `DB_*` trỏ tới DB đó):
 
-```powershell
-python .github\scripts\ci-smoke.py
+```bash
+python .github/scripts/ci-smoke.py
 ```
 
 Deploy tự chạy sau CI xanh trên `main` qua self-hosted runner `cdb-vm`; xem
@@ -47,15 +47,15 @@ Deploy tự chạy sau CI xanh trên `main` qua self-hosted runner `cdb-vm`; xem
 
 | Việc | Cách kiểm | Kỳ vọng |
 |---|---|---|
-| Postgres local | `infra/setup/local-db.sh` | container `cdb-study`, schema áp dụng, `app_user` CRUD được |
-| Least privilege | `local-db.sh` bước verify | không đọc được `pg_authid`, không `CREATE/DROP TABLE` |
-| Restore Neon | `infra/setup/neon.sh` | TLS `verify-full`, `app_user` CRUD OK |
-| TLS Neon | `psql sslmode=verify-full` | TLSv1.3, cert hợp lệ |
+| DB local | `docker run ... postgres:17` + `psql -f infra/setup/schema.sql` | schema áp dụng, `app_user` CRUD được |
+| Least privilege | `psql` bằng `app_user` | không đọc được `pg_authid`, không `CREATE/DROP TABLE` |
+| Restore Neon | `pg_restore --exit-on-error --no-owner` | TLS `verify-full`, `app_user` CRUD OK |
+| TLS Neon | `psql "sslmode=verify-full ..."` | TLSv1.3, cert hợp lệ |
 | 5432 từ Internet | `Test-NetConnection` | `TcpTestSucceeded=False` |
 | HTTPS origin | `openssl s_client` | `Verify return code: 0`, TLSv1.3 |
 | TLS 1.1 | `openssl s_client -tls1_1` | handshake failure (đúng) |
 | Cert renew | `certbot renew --dry-run` | PASS, deploy hook reload nginx |
-| Neon cold start | `infra/ops/maintenance/idle-check.sh` | không 503 sau scale-to-zero |
+| Neon cold start | `curl /api/health` sau 5 phút idle | không 503 sau scale-to-zero |
 
 ## 4. Nguyên tắc khi sửa
 

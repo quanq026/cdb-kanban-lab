@@ -1,13 +1,13 @@
 # CDB Kanban
 
-Ứng dụng Kanban nhỏ (Flask + PostgreSQL 17) chạy trên một VM Azure, database là Neon
+Ứng dụng Kanban nhỏ (Flask + PostgreSQL 17) chạy trên một VM, database là Neon
 (managed Postgres), phía trước là nginx + Let's Encrypt + Cloudflare.
 
 | | |
 |---|---|
 | Web | <https://kanban.akaine.io.vn/> |
 | Health | <https://kanban.akaine.io.vn/api/health> |
-| Stack | Flask 3.1 · psycopg 3.3 · PostgreSQL 17 · gunicorn · nginx · Docker |
+| Stack | Flask 3.1 · psycopg 3.3 · PostgreSQL 17 · gunicorn · nginx |
 
 ## Kiến trúc
 
@@ -15,14 +15,13 @@
 Browser ──HTTPS──► Cloudflare (proxy, SSL strict)
                         │ TLS 1.2/1.3
                         ▼
-                   nginx :443 (VM Azure) ──► gunicorn 127.0.0.1:8000 (Flask)
-                                                   │ psycopg_pool 1–5
-                                                   ▼
-                                    Neon PostgreSQL 17 "studydb" (verify-full)
+                   nginx :443 (VM) ──► gunicorn 127.0.0.1:8000 (Flask)
+                                            │ psycopg_pool 1–5
+                                            ▼
+                             Neon PostgreSQL 17 "studydb" (verify-full)
 ```
 
-VM còn chạy container `postgres:17` tại `127.0.0.1:55432` làm nguồn dump cho lab.
-App production chỉ nói chuyện với Neon.
+App chỉ kết nối bằng role `app_user` least-privilege. Port `5432` không mở ra Internet.
 
 ## Cấu trúc repo
 
@@ -34,23 +33,21 @@ app/                     Ứng dụng (deploy vào /opt/cdb/app)
   register.html          Đăng ký
   app.css                CSS (light/dark, responsive)
   app.js                 Board, auth, optimistic update, drag & drop
+  requirements.txt       Dependency pin
 
 infra/
-  setup/                 Chạy MỘT LẦN khi dựng mới
-    schema.sql           DDL users/tasks + index + trigger
+  setup/
+    schema.sql           DDL users/tasks + index + trigger (CI dùng)
     vm.sh                swap, Docker, nginx, psql 17, venv, systemd unit
-    local-db.sh          Postgres 17 trong Docker + app_user
-    neon.sh              restore dump sang Neon + app_user
     https.sh             Let's Encrypt + nginx TLS + renewal hook
-  ops/                   Dùng THƯỜNG XUYÊN
+  ops/
     deploy.sh            backup + install + health + rollback
     nginx-cdb.conf       reverse proxy :80/:443
     nginx-cloudflare-realip.conf
-    run-remote.ps1       copy script LF lên VM rồi chạy bằng sudo
-    maintenance/         auth-*, schema-*, purge-*, idle-check, sql/
+  migrations/            SQL migration up/down (đã áp dụng)
 
 .github/
-  workflows/ci.yml       Postgres 17 + smoke test + syntax
+  workflows/ci.yml       Postgres 17 + smoke test + syntax/lint
   workflows/deploy.yml   self-hosted runner trên VM
   scripts/ci-smoke.py    57 case Flask test client
 
@@ -62,57 +59,68 @@ docs/
   testing.md             CI smoke + kiểm thử UI/hạ tầng
 ```
 
-## Dựng mới
+## Chạy local
 
-Yêu cầu: Azure CLI đã đăng nhập, SSH key `~/.ssh/id_rsa_azure`, PowerShell. Chạy từ
-**root repo**.
+Yêu cầu: Python 3.12+, Docker (hoặc một Postgres 17 sẵn có).
 
-```powershell
-# 1. Chuẩn bị secrets trên VM (không commit): /etc/cdb/secrets.env
-#    NEON_HOST, NEON_APP_PASSWORD, NEON_OWNER_USER, NEON_OWNER_PASSWORD,
-#    PG_SUPER_PASSWORD, LOCAL_APP_PASSWORD
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+pip install -r app/requirements.txt
 
-# 2. Bootstrap VM: swap, Docker, nginx, psql 17, venv, systemd unit
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\vm.sh
+# Postgres 17 local
+docker run -d --name cdb-local -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=studydb postgres:17
+PGPASSWORD=dev psql "host=127.0.0.1 port=5432 dbname=studydb user=postgres" \
+  -f infra/setup/schema.sql
 
-# 3. (Tuỳ chọn) Postgres local trong Docker
-scp -i $env:USERPROFILE\.ssh\id_rsa_azure infra\setup\schema.sql `
-  azureuser@20.48.104.156:/opt/cdb/schema.sql
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\local-db.sh
+# Biến môi trường: copy rồi sửa cho local (DB_USER=postgres, DB_SSLMODE=disable)
+cp .env.example .env
+set -a; . ./.env; set +a
 
-# 4. (Tuỳ chọn) Restore dump sang Neon
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\neon.sh
-
-# 5. HTTPS (DNS đã trỏ về VM, port 80/443 mở)
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\https.sh
-
-# 6. Deploy app lần đầu từ checkout trên VM
-sudo bash infra/ops/deploy.sh "$PWD"
+gunicorn --chdir app --bind 127.0.0.1:8000 app:app
 ```
 
-Các lần sau chỉ cần push `main`: `CI` xanh → `Deploy` chạy tự động qua self-hosted
-runner `cdb-vm`.
+Mở <http://127.0.0.1:8000/>. App đọc biến trực tiếp từ process env, không tự nạp `.env`.
 
-```powershell
-gh workflow run deploy.yml --ref main   # chạy lại thủ công
+## CI/CD
+
+```text
+push main ──► CI (ubuntu-latest): Postgres 17 + schema + ci-smoke.py + lint
+                  └─ xanh ──► Deploy (self-hosted runner trên VM)
+                                 └─ sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
+```
+
+- `CI` chạy khi push/PR `main`: cài `app/requirements.txt`, áp `infra/setup/schema.sql`,
+  `py_compile` / `node --check` / `bash -n` / shellcheck / ruff, rồi `ci-smoke.py`.
+- `Deploy` chạy sau khi CI trên `main` xanh, qua runner `[self-hosted, cdb-vm]` (chỉ cần
+  outbound HTTPS, không mở SSH cho GitHub).
+- `deploy.sh` backup `/opt/cdb/app` + nginx conf vào `/opt/cdb/app/backup-<stamp>/`, cài
+  file, `nginx -t`, reload, restart, health-check retry 10×2 s; lỗi → tự rollback.
+- Mỗi lần đổi `app.css`/`app.js` phải tăng `?v=` trong **cả ba** HTML (Cloudflare cache
+  asset ~4 h).
+
+Chạy lại deploy thủ công:
+
+```bash
+gh workflow run deploy.yml --ref main
 gh run watch
 ```
 
-`infra/ops/deploy.sh` backup bản cũ vào `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/`
-trước khi ghi đè; nếu `nginx -t` fail, service không lên hoặc health-check fail (retry
-10 lần) thì tự khôi phục. Mỗi lần đổi `app.css`/`app.js` phải tăng `?v=` trong **cả ba**
-HTML vì Cloudflare cache asset tĩnh (~4 h).
+## Dựng production
 
-## Cấu hình production
+```bash
+git clone <repo-url> /opt/cdb/src && cd /opt/cdb/src
+sudo install -d -m 700 /etc/cdb
+sudoedit /etc/cdb/secrets.env     # NEON_HOST, NEON_APP_PASSWORD (+ owner DSN cho migration)
+sudo bash infra/setup/vm.sh       # bootstrap VM, đọc app/requirements.txt
+sudo bash infra/setup/https.sh    # DNS đã trỏ về VM, port 80/443 mở
+sudo bash infra/ops/deploy.sh "$PWD"
+```
 
-| Thành phần | Giá trị |
-|---|---|
-| VM | `20.48.104.156` · japaneast · `Standard_B2pls_v2` (Arm64, 2 vCPU / 4 GiB) · Ubuntu 24.04 |
-| App | `/opt/cdb/app`, venv `/opt/cdb/venv`, systemd `cdb-kanban`, nginx site `cdb-kanban` |
-| Neon | DB `studydb`, role `app_user`, endpoint trực tiếp (không `-pooler`) |
-| TLS origin | Let's Encrypt `CN=kanban.akaine.io.vn`, tự gia hạn `certbot.timer` |
-| Secret | `/etc/cdb/app.env` (app) + `/etc/cdb/secrets.env` (owner) — **không** trong repo |
-| DB local | container `cdb-study`, volume `cdb-study-data`, `127.0.0.1:55432` |
+`deploy.sh` đọc `APP_OWNER`, `APP_GROUP`, `DOMAIN` từ env nếu cần override; mặc định lấy
+owner/group của `/opt/cdb/app` và domain trong script.
 
 ## Tài liệu
 
@@ -124,7 +132,7 @@ HTML vì Cloudflare cache asset tĩnh (~4 h).
 | Mô hình bảo mật và đánh đổi | [docs/security.md](docs/security.md) |
 | Test gì, chạy sao | [docs/testing.md](docs/testing.md) |
 
-## Phạm vi & giới hạn
+## Giới hạn
 
 - Demo, không dùng cho dữ liệu thật: **không rate limit**, không CAPTCHA/2FA/xác thực
   email, không có luồng quên/đổi mật khẩu.
