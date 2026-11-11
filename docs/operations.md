@@ -209,7 +209,7 @@ bật `includeSubDomains`/`preload`.
 - VM + IP + disk ≈ **$44.30/tháng** nếu chạy 24/7; deallocate sau demo.
 - Neon Free scale-to-zero sau 5 phút: request đầu sau idle ~1.9–3.1 s; pool có
   `check_connection` + retry nên không trả 500/503.
-- Chưa có backup định kỳ/PITR/failover; dump nằm cùng VM.
+- Chưa có backup định kỳ/PITR/failover.
 - Cert phụ thuộc `certbot.timer`; VM tắt quá lâu có thể hết hạn.
 - Không rate limit (xem [security.md](security.md) §6).
 - `/api/health?detail=1` chỉ xem được từ localhost (SSH vào VM hoặc `ssh -L`).

@@ -57,11 +57,28 @@ docs/
   operations.md          Deploy, rollback, migration, backup, TLS, cleanup
   security.md            Least privilege, secret, TLS, auth, đánh đổi
   testing.md             CI smoke + kiểm thử UI/hạ tầng
+  runbook-manual.md      Việc phải làm tay trên VM/Neon/Cloudflare/Azure
 ```
 
 ## Chạy local
 
-Yêu cầu: Python 3.12+, Docker (hoặc một Postgres 17 sẵn có).
+Yêu cầu: Python 3.12+ và **một Neon branch riêng cho dev** (không dùng chung branch
+production, không trỏ dev vào DB production).
+
+1. Trong Neon: `Branches → New branch` từ `main`, đặt tên `dev-<tên>`, rồi lấy host,
+   role và password của branch đó.
+2. Điền `.env`:
+
+```bash
+cp .env.example .env
+# DB_HOST=<branch-id>.<region>.aws.neon.tech
+# DB_NAME=studydb
+# DB_USER=<role>
+# DB_PASSWORD=<password>
+# DB_SSLMODE=verify-full
+```
+
+3. Cài dependency, áp schema một lần cho branch mới, chạy app:
 
 ```bash
 python -m venv .venv
@@ -69,20 +86,16 @@ python -m venv .venv
 # Linux/macOS: source .venv/bin/activate
 pip install -r app/requirements.txt
 
-# Postgres 17 local
-docker run -d --name cdb-local -p 127.0.0.1:5432:5432 \
-  -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=studydb postgres:17
-PGPASSWORD=dev psql "host=127.0.0.1 port=5432 dbname=studydb user=postgres" \
-  -f infra/setup/schema.sql
-
-# Biến môi trường: copy rồi sửa cho local (DB_USER=postgres, DB_SSLMODE=disable)
-cp .env.example .env
 set -a; . ./.env; set +a
-
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/setup/schema.sql
 gunicorn --chdir app --bind 127.0.0.1:8000 app:app
 ```
 
+`DATABASE_URL` chỉ dùng cho `psql`, dạng
+`postgresql://<role>:<password>@<host>/studydb?sslmode=verify-full`.
+
 Mở <http://127.0.0.1:8000/>. App đọc biến trực tiếp từ process env, không tự nạp `.env`.
+Tuỳ chọn tạm nếu không dùng Neon: `docker run ... postgres:17` (đặt `DB_SSLMODE=disable`).
 
 ## CI/CD
 
@@ -131,6 +144,7 @@ owner/group của `/opt/cdb/app` và domain trong script.
 | Deploy / rollback / migration / dọn tài nguyên | [docs/operations.md](docs/operations.md) |
 | Mô hình bảo mật và đánh đổi | [docs/security.md](docs/security.md) |
 | Test gì, chạy sao | [docs/testing.md](docs/testing.md) |
+| Việc phải chạy tay trên hạ tầng | [docs/runbook-manual.md](docs/runbook-manual.md) |
 
 ## Giới hạn
 
@@ -138,5 +152,5 @@ owner/group của `/opt/cdb/app` và domain trong script.
   email, không có luồng quên/đổi mật khẩu.
 - Session là cookie ký phía client; logout chỉ xoá cookie hiện tại. Muốn thu hồi toàn bộ
   phải đổi `APP_SECRET_KEY` rồi restart.
-- Chưa test mất toàn máy/PITR/failover; dump nằm cùng VM.
+- Chưa test mất toàn máy/PITR/failover; chưa có backup tự động.
 - Migration thủ công; deploy không tự chạy DDL.

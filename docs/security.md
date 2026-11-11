@@ -88,7 +88,7 @@ App **không** có rate limiter. Hệ quả:
 - Demo, không dùng cho dữ liệu thật.
 - Không rate limit (mục 6); không CAPTCHA/2FA/xác thực email.
 - Session client-side: logout không thu hồi cookie đã copy.
-- Chưa test mất toàn máy/PITR/failover; dump nằm cùng VM.
+- Chưa test mất toàn máy/PITR/failover; chưa có backup tự động.
 - HSTS 180 ngày: browser đã truy cập vẫn ép HTTPS kể cả khi rollback.
 - Cert phụ thuộc `certbot.timer`; VM tắt quá lâu có thể hết hạn.
 - CSP không cho inline script/style.
