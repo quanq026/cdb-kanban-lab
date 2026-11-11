@@ -96,3 +96,30 @@ jobs:
 
       - name: Smoke test (Flask test client)
         run: python .github/scripts/ci-smoke.py
+
+  actionlint:
+    name: Lint workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          set -euo pipefail
+          base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          curl -fsSL -o /tmp/actionlint.tar.gz \
+            "$base/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o /tmp/actionlint-checksums.txt \
+            "$base/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          expected="$(awk -v f="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            '$2 == f {print $1}' /tmp/actionlint-checksums.txt)"
+          echo "$expected  /tmp/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          /tmp/actionlint -version
+
+      - name: Run actionlint
+        run: /tmp/actionlint -color
