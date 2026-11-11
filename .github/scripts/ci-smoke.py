@@ -226,6 +226,21 @@ def main():
         expect(r.status_code == 200, "local health detail -> 200")
         expect(r.get_json().get("database") is not None, "health detail exposes database locally")
 
+        # --- check-domain (on-demand tls ask endpoint) ---
+        r = client.get("/api/check-domain")
+        expect(r.status_code == 403, "check-domain without param -> 403")
+        r = client.get("/api/check-domain?domain=evil.com")
+        expect(r.status_code == 403, "check-domain unauthorized host -> 403")
+        current_domain = os.environ.get("DOMAIN", "localhost")
+        os.environ["DOMAIN"] = "kanban.example.com"
+        r = client.get("/api/check-domain?domain=kanban.example.com")
+        expect(r.status_code == 200, "check-domain allowed DOMAIN -> 200")
+        r = client.get("/api/check-domain?domain=kanban.example.com:443")
+        expect(r.status_code == 200, "check-domain allowed DOMAIN with port -> 200")
+        r = client.get("/api/check-domain?domain=sub.kanban.example.com")
+        expect(r.status_code == 403, "check-domain mismatched sub-host -> 403")
+        os.environ["DOMAIN"] = current_domain
+
     finally:
         # Always remove this run's rows so reruns stay clean.
         try:

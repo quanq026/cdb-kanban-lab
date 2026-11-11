@@ -93,7 +93,7 @@ docker compose up -d --build
        │
        ├─ Khởi động db: mount schema.sql khởi tạo cấu trúc bảng
        ├─ Build app: đóng gói Flask & Gunicorn non-root
-       └─ Khởi động caddy: tự kết nối ACME Let's Encrypt cấp SSL cho DOMAIN
+       └─ Khởi động caddy: On-Demand TLS tự kết nối ACME Let's Encrypt cấp SSL cho DOMAIN
 ```
 
 ## 6. Quyết định thiết kế đáng chú ý
