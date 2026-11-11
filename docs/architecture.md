@@ -9,17 +9,23 @@ Người dùng
 Cloudflare  (proxy, SSL strict, min TLS 1.2, HTTP/3 + Brotli)
    │ TLS 1.2/1.3 tới origin
    ▼
-nginx :443 trên VM ──► gunicorn 127.0.0.1:8000 (Flask, 2 worker)
-   │                              │ psycopg_pool (min 1 / max 5)
-   │                              ▼
-   │               Neon PostgreSQL 17 "studydb" (TLS 1.3, verify-full)
-   │
-   └─ :80 → 301 HTTPS (chừa /.well-known/acme-challenge/ cho ACME HTTP-01)
+nginx :443 trên VM
+   │ proxy_pass 127.0.0.1:8000
+   ▼
+docker: cdb-app (image ghcr.io/<owner>/cdb-kanban:<sha>)
+   │ gunicorn 0.0.0.0:8000 trong container, bind ra host chỉ loopback
+   │ psycopg_pool (min 1 / max 5)
+   ▼
+Neon PostgreSQL 17 "studydb" (TLS 1.3, verify-full)
+
+nginx :80 → 301 HTTPS (chừa /.well-known/acme-challenge/ cho ACME HTTP-01)
 ```
 
-- `5432` **không** mở ra Internet; app chỉ nghe loopback `127.0.0.1:8000`.
-- SSH (22) chỉ mở cho IP vận hành.
+- Container publish `127.0.0.1:8000:8000` — app vẫn chỉ nghe loopback trên VM.
+- `5432` **không** mở ra Internet; SSH (22) chỉ mở cho IP vận hành.
 - App không bao giờ kết nối bằng role owner; chỉ `app_user`.
+- Image chạy non-root (`UID 10001`), `read_only: true`, `cap_drop: ALL`,
+  `no-new-privileges`, tmpfs cho `/tmp`.
 
 ## 2. Thành phần
 
@@ -29,9 +35,10 @@ nginx :443 trên VM ──► gunicorn 127.0.0.1:8000 (Flask, 2 worker)
 | Size / OS | Arm64 2 vCPU / 4 GiB, Ubuntu 24.04 LTS |
 | Đĩa / swap | SSD 30 GB, swap 2 GB |
 | NSG | 22 ← IP vận hành; 80, 443 ← `*`; không có 5432 |
-| Runtime | gunicorn 2 worker, Flask 3.1, psycopg 3.3, psycopg_pool 3.3 |
-| App dir | `/opt/cdb/app`; venv `/opt/cdb/venv/bin/python` |
-| Service | systemd `cdb-kanban` (unit do `infra/setup/vm.sh` cài) |
+| Runtime | Docker container `cdb-app`: python:3.12-slim, gunicorn 2 worker, Flask 3.1, psycopg 3.3, psycopg_pool 3.3 |
+| Image | `ghcr.io/<owner>/cdb-kanban:<sha>` (build arm64 trong CI, tag `latest` không dùng để deploy) |
+| App dir | `/app` trong image; compose + tag hiện tại ở `/opt/cdb/` |
+| Service | `docker compose` (`infra/ops/docker-compose.yml` → `/opt/cdb/docker-compose.yml`), restart `unless-stopped` |
 | nginx | site `cdb-kanban` + `conf.d/cloudflare-realip.conf` |
 | Neon | DB `studydb`, role `app_user`, endpoint trực tiếp (không `-pooler`) |
 | Domain | `kanban.akaine.io.vn` → Cloudflare proxy → origin |
@@ -75,9 +82,9 @@ Kanban có 3 cột Todo/Doing/Done — boolean không biểu diễn được `do
 ## 4. Luồng request
 
 1. **Trang tĩnh** (`/`, `/login`, `/register`, `/app.css`, `/app.js`): Flask phục vụ file
-   trong `/opt/cdb/app`. Trang và API trả `Cache-Control: no-store`; CSS/JS trả `no-cache`
-   ở origin. `app.py` gắn `?v=<sha1 8 ký tự>` vào hai asset một lần lúc khởi động, nên URL
-   đổi khi nội dung đổi.
+   trong `/app` (bên trong image). Trang và API trả `Cache-Control: no-store`; CSS/JS trả
+   `no-cache` ở origin. `app.py` gắn `?v=<sha1 8 ký tự>` vào hai asset một lần lúc khởi
+   động, nên URL đổi khi nội dung đổi.
 2. **Xác thực**: `before_request` chặn mọi trang (trừ `/login`, `/register`, asset) và mọi
    `/api/*` (trừ `/api/login`, `/api/register`, `/api/health`). Thiếu session → API 401
    JSON, trang 302 `/login`.
@@ -89,7 +96,8 @@ Kanban có 3 cột Todo/Doing/Done — boolean không biểu diễn được `do
 5. **IP thật**: nginx `real_ip_header CF-Connecting-IP`, chỉ tin dải Cloudflare
    (`infra/ops/nginx-cloudflare-realip.conf`) rồi ghi đè `X-Forwarded-For`; Flask dùng
    `ProxyFix(x_for=1, x_proto=1, x_host=1)`. Log thấy IP người dùng, không phải IP CF.
-6. **Log**: mỗi request một dòng `METHOD path status Xms ip=...` vào journald; không ghi
+6. **Log**: mỗi request một dòng `METHOD path status Xms ip=...` ra stdout container
+   (`--access-logfile -`), Docker json-file driver xoay 10 MB × 3; không ghi
    body/header/token.
 
 ## 5. Đường deploy
@@ -97,18 +105,25 @@ Kanban có 3 cột Todo/Doing/Done — boolean không biểu diễn được `do
 ```
 push main ──► GitHub Actions
                 ├─ CI (ubuntu-latest): postgres:17 + schema + ci-smoke.py + lint
-                └─ Deploy (sau CI xanh, workflow_run)
-                     └─ self-hosted runner cdb-vm (trên VM, outbound HTTPS)
-                          └─ sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
-                               ├─ backup /opt/cdb/app/backup-<stamp>/ + nginx conf
-                               ├─ install app + nginx conf
-                               ├─ nginx -t && reload
-                               ├─ restart cdb-kanban
-                               └─ health 3 mức, retry 10×2 s; lỗi → rollback
+                └─ Image (ubuntu-24.04-arm): hadolint + build arm64 + trivy
+                     └─ push main: ghcr.io/<owner>/cdb-kanban:<sha> (+ latest)
+                                        │
+                                        ▼
+                     Deploy (sau CI xanh, workflow_run)
+                       └─ self-hosted runner cdb-vm (trên VM, outbound HTTPS)
+                            ├─ docker login ghcr.io bằng GITHUB_TOKEN
+                            ├─ docker pull <repo>:<sha> (user runner, group docker)
+                            └─ sudo env IMAGE_TAG=<sha> bash infra/ops/deploy.sh
+                                 ├─ pull chỉ khi thiếu image
+                                 ├─ ghi /opt/cdb/current_tag + previous_tag
+                                 ├─ docker compose up -d
+                                 ├─ backup nginx conf → cài mới → nginx -t → reload
+                                 ├─ health 10×2 s; lỗi → nginx + compose về bản cũ
+                                 └─ prune image, giữ 3 tag gần nhất
 ```
 
 Không cần mở SSH cho GitHub-hosted runner. Runner chạy bằng systemd, label
-`[self-hosted, cdb-vm]`.
+`[self-hosted, cdb-vm]`, user thuộc group `docker`.
 
 Rollback tự động nằm trong `infra/ops/deploy.sh` (`trap ERR`). Quy trình thủ công:
 [operations.md](operations.md).
@@ -121,6 +136,8 @@ Rollback tự động nằm trong `infra/ops/deploy.sh` (`trap ERR`). Quy trình
 | `DB_SSLROOTCERT=/etc/ssl/certs/ca-certificates.crt` | `sslrootcert=system` không hợp với libpq bundled của `psycopg[binary]`; vẫn `verify-full` |
 | HTTPS ở origin | Cloudflare SSL strict cần 443; thiếu TLS → lỗi 521 |
 | `/api/health` hai mức | Bản công khai không lộ host/database/sslmode; `?detail=1` chỉ localhost |
+| Image arm64 + tag SHA | VM là Arm64; deploy/rollback chỉ đổi tag, không build trên VM |
+| Container read-only, non-root | Giảm bề mặt nếu app bị lỗi; chỉ `/tmp` ghi được |
 | Không rate limit | Đánh đổi được ghi ở [security.md](security.md) §6 |
 | `DELETE` dùng query string | Body trên DELETE không được mọi proxy/client xử lý nhất quán |
 | 1 CSS + 1 JS, CSP không `unsafe-inline` | Asset cache bằng `?v=` tự sinh, CSP chặt, không inline script/style |

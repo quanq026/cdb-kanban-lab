@@ -1,0 +1,21 @@
+services:
+  app:
+    image: ${CDB_IMAGE:?CDB_IMAGE is required}:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: cdb-app
+    env_file: /etc/cdb/app.env
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

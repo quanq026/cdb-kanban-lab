@@ -15,18 +15,23 @@
 Browser ──HTTPS──► Cloudflare (proxy, SSL strict)
                         │ TLS 1.2/1.3
                         ▼
-                   nginx :443 (VM) ──► gunicorn 127.0.0.1:8000 (Flask)
+                   nginx :443 (VM) ──► 127.0.0.1:8000
+                                            │ container cdb-app (gunicorn + Flask)
                                             │ psycopg_pool 1–5
                                             ▼
                              Neon PostgreSQL 17 "studydb" (verify-full)
 ```
 
-App chỉ kết nối bằng role `app_user` least-privilege. Port `5432` không mở ra Internet.
+App chạy trong container non-root `cdb-app` (image `ghcr.io/<owner>/cdb-kanban:<sha>`), chỉ
+publish `127.0.0.1:8000`. App kết nối bằng role `app_user` least-privilege; port `5432`
+không mở ra Internet.
 
 ## Cấu trúc repo
 
 ```
-app/                     Ứng dụng (deploy vào /opt/cdb/app)
+Dockerfile               image runtime (python:3.12-slim, non-root, healthcheck)
+.dockerignore
+app/                     Ứng dụng (copy vào /app trong image)
   app.py                 Flask API, pool, session, static + cache headers
   index.html             Board Kanban
   login.html             Đăng nhập
@@ -38,10 +43,11 @@ app/                     Ứng dụng (deploy vào /opt/cdb/app)
 infra/
   setup/
     schema.sql           DDL users/tasks + index + trigger (CI dùng)
-    vm.sh                swap, nginx, psql 17, venv, systemd unit
+    vm.sh                swap, nginx, psql 17, Docker + compose, docker group
     https.sh             Let's Encrypt + nginx TLS + renewal hook
   ops/
-    deploy.sh            backup + install + health + rollback
+    deploy.sh            pull image + compose up + health + rollback theo tag
+    docker-compose.yml   service app, bind 127.0.0.1:8000, read-only, log rotate
     backup.sh            pg_dump Neon -> R2 + prune (chạy trên GitHub Actions)
     restore-test.sh      restore bản mới nhất vào DB tạm + kiểm tra
     nginx-cdb.conf       reverse proxy :80/:443
@@ -49,9 +55,10 @@ infra/
   migrations/            SQL migration up/down (đã áp dụng)
 
 .github/
-  workflows/ci.yml       Postgres 17 + smoke test + syntax/lint
+  workflows/ci.yml       test Postgres 17 + lint + build/scan/push image arm64
   workflows/backup.yml   backup Neon ra R2 hằng ngày + restore test hằng tuần
-  workflows/deploy.yml   self-hosted runner trên VM
+  workflows/deploy.yml   self-hosted runner trên VM, deploy theo tag SHA
+  dependabot.yml         pip, github-actions, docker (hằng tuần)
   scripts/ci-smoke.py    59 case Flask test client
 
 docs/
@@ -107,25 +114,33 @@ Mở <http://127.0.0.1:8000/>. App đọc biến trực tiếp từ process env,
 ## CI/CD
 
 ```text
-push main ──► CI (ubuntu-latest): Postgres 17 + schema + ci-smoke.py + lint
+push main ──► CI (ubuntu-latest): test Postgres 17 + lint
+                  └─ Image (ubuntu-24.04-arm): hadolint + build arm64 + trivy
+                       └─ push main: ghcr.io/<owner>/cdb-kanban:<sha> (+ latest)
                   └─ xanh ──► Deploy (self-hosted runner trên VM)
-                                 └─ sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
+                                 └─ runner pull <sha> → sudo deploy.sh → compose up
+                                    → health → (lỗi: rollback tag + nginx)
 ```
 
-- `CI` chạy khi push/PR `main`: cài `app/requirements.txt`, áp `infra/setup/schema.sql`,
-  `py_compile` / `node --check` / `bash -n` / shellcheck / ruff, rồi `ci-smoke.py`.
-- `Deploy` chạy sau khi CI trên `main` xanh, qua runner `[self-hosted, cdb-vm]` (chỉ cần
-  outbound HTTPS, không mở SSH cho GitHub).
-- `deploy.sh` backup `/opt/cdb/app` + nginx conf vào `/opt/cdb/app/backup-<stamp>/`, cài
-  file, `nginx -t`, reload, restart, health-check retry 10×2 s; lỗi → tự rollback.
+- `CI` chạy khi push/PR `main`: test + lint, cùng một job `Image (linux/arm64)` build
+  `python:3.12-slim`, chạy `hadolint`, `trivy` (fail HIGH/CRITICAL có bản vá), chỉ push
+  GHCR khi push `main`. PR chỉ build, không push.
+- `Deploy` chạy sau khi **toàn bộ** CI trên `main` xanh, qua runner `[self-hosted, cdb-vm]`
+  (chỉ cần outbound HTTPS, không mở SSH cho GitHub). Runner đăng nhập GHCR bằng
+  `GITHUB_TOKEN` và pull image bằng chính user runner (group `docker`); `deploy.sh` chạy
+  bằng `sudo` chỉ pull lại khi image thiếu, nên root không cần credential GHCR.
+- `deploy.sh` ghi `/opt/cdb/current_tag` + `previous_tag`, `docker compose up -d`, sao lưu
+  nginx conf vào `/opt/cdb/nginx-backup/`, cài conf mới, `nginx -t`, reload, health-check
+  10×2 s; lỗi → khôi phục nginx + quay lại `previous_tag` rồi exit 1. Image cũ được prune,
+  giữ 3 tag gần nhất.
 - `Backup` chạy hằng ngày 02:17 VN trên `ubuntu-latest`: dump Neon, đẩy dump + manifest
   counts lên R2, prune còn 14 bản; thứ Hai 10:17 VN restore bản mới nhất vào DB tạm để
   kiểm tra; 03:47 VN hằng ngày kiểm bản mới nhất không cũ quá 36 h
   (xem [docs/operations.md §5](docs/operations.md)).
 - `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css` và `/app.js` một lần lúc khởi động;
-  deploy restart nên asset mới có URL mới (Cloudflare cache ~4 h).
+  container restart nên asset mới có URL mới (Cloudflare cache ~4 h).
 
-Chạy lại deploy thủ công:
+Chạy lại deploy thủ công (tag phải là SHA đã build thành công):
 
 ```bash
 gh workflow run deploy.yml --ref main
@@ -138,13 +153,20 @@ gh run watch
 git clone <repo-url> /opt/cdb/src && cd /opt/cdb/src
 sudo install -d -m 700 /etc/cdb
 sudoedit /etc/cdb/secrets.env     # NEON_HOST, NEON_APP_PASSWORD (+ owner DSN cho migration)
-sudo bash infra/setup/vm.sh       # bootstrap VM, đọc app/requirements.txt
+sudo bash infra/setup/vm.sh       # swap, nginx, psql client, Docker + compose
 sudo bash infra/setup/https.sh    # DNS đã trỏ về VM, port 80/443 mở
-sudo bash infra/ops/deploy.sh "$PWD"
 ```
 
-`deploy.sh` đọc `APP_OWNER`, `APP_GROUP`, `DOMAIN` từ env nếu cần override; mặc định lấy
-owner/group của `/opt/cdb/app` và domain trong script.
+Sau đó làm checklist cutover trong [docs/runbook-manual.md](docs/runbook-manual.md) §3
+(đăng nhập GHCR thử, chạy container trên cổng 8001, rồi mới tắt `cdb-kanban.service`),
+rồi deploy lần đầu bằng tag có thật:
+
+```bash
+gh workflow run deploy.yml --ref main
+```
+
+`deploy.sh` nhận `IMAGE_TAG` (bắt buộc) và `IMAGE_REPO` (bắt buộc), `DOMAIN` tuỳ chọn;
+`IMAGE_REPO` mặc định trên workflow là `ghcr.io/<owner>/cdb-kanban`.
 
 ## Tài liệu
 

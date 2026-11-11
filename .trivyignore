@@ -1,0 +1,3 @@
+# Trivy allowlist. One CVE/package per line, with a comment saying why.
+# Example:
+# CVE-2026-0000  # libfoo: not reachable, only used by the build stage
