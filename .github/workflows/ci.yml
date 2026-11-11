@@ -70,13 +70,11 @@ jobs:
           set -euo pipefail
           psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 \
             -f infra/setup/schema.sql
-          psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE ROLE app_user LOGIN PASSWORD 'ci-app-password';
-          GRANT CONNECT ON DATABASE studydb TO app_user;
-          GRANT USAGE ON SCHEMA public TO app_user;
-          GRANT SELECT, INSERT, UPDATE, DELETE ON users, tasks TO app_user;
-          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
-          SQL
+          psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 \
+            -f infra/setup/seed.sql
+          psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 \
+            -v app_user_password='ci-app-password' \
+            -f infra/setup/app_user.sql
           is_super=$(psql -h 127.0.0.1 -U postgres -d studydb -tAc \
             "SELECT rolsuper FROM pg_roles WHERE rolname = 'app_user'")
           test "$is_super" = "f"
