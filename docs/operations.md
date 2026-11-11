@@ -114,8 +114,10 @@ Neon production ──pg_dump -Fc──► cdb-<stamp>.dump + .json (row counts)
 - Job `Restore newest dump`: cron thứ Hai 03:17 UTC (10:17 VN) hoặc `workflow_dispatch` với
   input `restore_test`; tải bản mới nhất, restore vào `RESTORE_TEST_DSN`, so counts với
   manifest và kiểm tra index `idx_tasks_user_status_position` + trigger
-  `trg_tasks_updated_at`. Script từ chối chạy nếu `RESTORE_TEST_DSN` trùng
-  `NEON_BACKUP_DSN`.
+  `trg_tasks_updated_at`. Script từ chối chạy nếu `RESTORE_TEST_DSN` trùng DSN, trùng host,
+  hoặc trùng tên database với `NEON_BACKUP_DSN`.
+- Job `Check latest dump age`: cron hằng ngày 03:47 VN, fail nếu object `.dump` mới nhất cũ
+  hơn 36 giờ, để phát hiện backup im lặng (job vẫn xanh nhưng không có bản mới).
 - Fail → workflow đỏ (email GitHub). Nếu secret `NOTIFY_WEBHOOK` có giá trị thì gửi thêm
   POST JSON kiểu Discord (`{"content": "..."}`).
 - Secret nằm trong GitHub Environment `backup`, không có trên VM: `NEON_BACKUP_DSN`,
@@ -129,14 +131,27 @@ Neon production ──pg_dump -Fc──► cdb-<stamp>.dump + .json (row counts)
 | Mục | Giá trị |
 |---|---|
 | Lịch dump | Hằng ngày 02:17 VN (cron `17 19 * * *` UTC) |
-| Retention | `BACKUP_KEEP` bản mới nhất, mặc định 14 (2 tuần); mỗi bản có `.json` counts |
+| Retention | `BACKUP_KEEP` bản `.dump` mới nhất, mặc định 14 (2 tuần); tính **mọi** bản trong bucket, kể cả `workflow_dispatch` chạy tay; mỗi bản có `.json` counts |
 | RPO | ≤ 24 h (mất tối đa dữ liệu phát sinh từ bản dump gần nhất) |
 | RTO | ~10–20 phút (restore vào branch mới, đổi `NEON_HOST`, restart app) |
 | Phạm vi | Logical dump; **chưa** có PITR/WAL, **chưa** diễn tập mất toàn máy/failover |
 
-Giữ N bản gần nhất thay vì 7 daily + 4 weekly vì dữ liệu nhỏ (dump vài trăm KB), 14 bản
-daily đã phủ 2 tuần và vẫn bắt được lỗi phát hiện muộn trong 1 tuần, không cần thêm tầng
-thư mục và logic prune. Đổi bằng biến `BACKUP_KEEP` trong workflow.
+Counts trong manifest lấy từ **cùng snapshot** với dump: `backup.sh` giữ một transaction
+`REPEATABLE READ`, `pg_export_snapshot()`, rồi truyền snapshot đó cho `pg_dump --snapshot`
+và cho hai câu `SELECT count(*)`. Vì vậy restore-test so sánh **bằng** (không có dung sai
+chênh lệch); DSN backup phải dùng endpoint trực tiếp của Neon, không qua pooler.
+
+Chốt an toàn trước khi prune (dump mới vẫn được giữ, chỉ bỏ bước prune và exit 1):
+users = 0, hoặc users giảm còn dưới 50% so với manifest của bản trước. Workflow đỏ để
+người dùng kiểm tra; bản dump mới vẫn nằm trên R2 nếu sau đó cần dùng.
+
+Retention giữ N bản gần nhất thay vì 7 daily + 4 weekly vì dữ liệu nhỏ (dump vài trăm KB),
+14 bản daily đã phủ 2 tuần và vẫn bắt được lỗi phát hiện muộn trong 1 tuần, không cần thêm
+tầng thư mục và logic prune. Đổi bằng biến `BACKUP_KEEP` trong workflow.
+
+GitHub tắt schedule sau 60 ngày repo không có hoạt động; workflow hẹn giờ khác cũng bị tắt
+theo nên không tự keepalive được. Dùng external cron gọi `workflow_dispatch` (xem
+[runbook-manual.md](runbook-manual.md) §2) hoặc kiểm tra thủ công hằng tháng.
 
 ### 5.3. Restore thủ công
 
@@ -179,6 +194,11 @@ bash infra/ops/restore-test.sh
 ```
 
 In từng bước `PASS`/`FAIL`, exit code 1 nếu lệch counts hoặc thiếu index/trigger.
+
+Guard DSN chặn cả trường hợp trùng **host** và trùng **tên database**, nên branch Neon
+(mặc định dùng lại tên DB production) chưa đủ: tạo database riêng trong branch, ví dụ
+`CREATE DATABASE restoretest;`, rồi đặt `RESTORE_TEST_DSN` dạng
+`postgresql://<user>:<pass>@<branch-host>/restoretest`.
 
 Trạng thái diễn tập thật: **[chưa chạy]** — điền ngày + kết quả sau lần chạy đầu tiên.
 

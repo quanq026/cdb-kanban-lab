@@ -120,7 +120,8 @@ push main ──► CI (ubuntu-latest): Postgres 17 + schema + ci-smoke.py + lin
   file, `nginx -t`, reload, restart, health-check retry 10×2 s; lỗi → tự rollback.
 - `Backup` chạy hằng ngày 02:17 VN trên `ubuntu-latest`: dump Neon, đẩy dump + manifest
   counts lên R2, prune còn 14 bản; thứ Hai 10:17 VN restore bản mới nhất vào DB tạm để
-  kiểm tra (xem [docs/operations.md §5](docs/operations.md)).
+  kiểm tra; 03:47 VN hằng ngày kiểm bản mới nhất không cũ quá 36 h
+  (xem [docs/operations.md §5](docs/operations.md)).
 - `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css` và `/app.js` một lần lúc khởi động;
   deploy restart nên asset mới có URL mới (Cloudflare cache ~4 h).
 
