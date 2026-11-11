@@ -17,13 +17,11 @@ Tài liệu mô tả chi tiết các biện pháp và kiến trúc bảo mật c
 
 | Cổng | Giao thức | Phạm vi truy cập | Mục đích |
 |---|---|---|---|
-| `80` | HTTP | Toàn cầu (Public) | Nhận request từ người dùng; Caddy tự động chuyển hướng 301 sang HTTPS |
-| `443` | HTTPS | Toàn cầu (Public) | Điểm truy cập web chính thống, mã hóa TLS |
-| `5432` | PostgreSQL | Nội bộ host (`127.0.0.1`) | Chỉ mở cho chính máy host để chạy backup `pg_dump` hoặc dev local; **không** mở ra Internet |
-| `8000` | HTTP | Mạng nội bộ Docker | Gunicorn lắng nghe trong mạng bridge nội bộ; chỉ Caddy mới gọi tới |
+| `80` | HTTP (TCP) | Toàn cầu (Public) | Nhận request từ người dùng; Caddy tự động chuyển hướng 301 sang HTTPS |
+| `443` | HTTPS (TCP / UDP) | Toàn cầu (Public) | Điểm truy cập web chính thống, mã hóa TLS / HTTP/3 qua Caddy |
 
 - Caddy là cổng ngõ duy nhất tiếp nhận request từ bên ngoài Internet.
-- Giao tiếp giữa Caddy, Flask App và PostgreSQL Container hoàn toàn nằm trên mạng ảo Docker riêng biệt.
+- Container database (`postgres:17-alpine`) và app (`cdb-app`) chỉ giao tiếp qua mạng bridge nội bộ của Docker; cổng 5432 và 8000 hoàn toàn không publish ra máy host hay Internet.
 
 ---
 
@@ -76,3 +74,9 @@ Container ứng dụng (`cdb-app`) được cấu hình nghiêm ngặt trong `do
 - **Phân quyền người dùng**:
   - Mọi thao tác CRUD task đều kiểm tra `user_id` có khớp với `session.uid` hay không qua hàm `same_user()`.
   - Thao tác trên task của user khác hoặc task không tồn tại đều trả về `404 Not Found` để không lộ ID hay sự tồn tại của dữ liệu.
+
+---
+
+## 7. Vai trò người dùng Database & Đánh đổi
+
+Container DB trong Docker Compose đặt `POSTGRES_USER=app_user` nên ứng dụng kết nối và chạy bằng role superuser của cơ sở dữ liệu nội bộ này. Đây là đánh đổi có chủ ý nhằm giữ cho bản demo tinh gọn và khởi tạo tự động thuận tiện nhất. Nếu dùng cơ sở dữ liệu bên ngoài hoặc triển khai với dữ liệu thật, bạn nên cấu hình một role riêng áp dụng nguyên tắc quyền hạn tối thiểu (least-privilege, chỉ cấp quyền CRUD trên bảng, không cấp quyền superuser hay tạo database/role).

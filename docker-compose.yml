@@ -7,12 +7,9 @@ services:
       POSTGRES_DB: ${DB_NAME:-studydb}
       POSTGRES_USER: ${DB_USER:-app_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-kanban_internal_secret_2026}
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./infra/setup/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./infra/setup/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-app_user} -d ${DB_NAME:-studydb}"]
       interval: 5s
