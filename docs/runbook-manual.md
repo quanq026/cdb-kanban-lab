@@ -116,3 +116,119 @@ curl -fsS -X POST \
 ```
 
 - [ ] Kiểm tra job `Check latest dump age`: xanh nghĩa là bản `.dump` mới nhất ≤ 36 giờ.
+
+## 3. Cutover systemd/venv → Docker (làm **trước** khi merge PR Docker)
+
+Mục tiêu: đổi runtime production sang container mà vẫn giữ đường lui. **Chưa xoá**
+`/opt/cdb/venv` và `cdb-kanban.service` cho tới bước 3.7. Có downtime vài giây ở bước 3.5.
+
+- [ ] 3.1. Cài Docker + compose, giữ psql client/nginx/swap:
+
+```bash
+cd /opt/cdb/src   # checkout hiện tại trên VM
+sudo bash infra/setup/vm.sh
+sudo docker --version && sudo docker compose version
+grep -c '^APP_SECRET_KEY=' /etc/cdb/app.env   # phải là 1; script giữ key cũ, không reset session
+```
+
+- [ ] 3.2. Cho user runner + user deploy vào group `docker`, rồi khởi động lại runner để
+      nhận group mới (nếu không, `docker` sẽ báo permission denied):
+
+```bash
+sudo usermod -aG docker <runner-user>
+sudo systemctl restart actions.runner.<owner>-<repo>.<runner-name>.service   # tên thật lấy từ systemctl list-units 'actions.runner*'
+groups <runner-user>
+```
+
+- [ ] 3.3. Build thử image arm64 **tại chỗ** từ checkout của branch (CI chỉ push sau khi
+      merge, nên bước cutover dùng image local):
+
+```bash
+cd /opt/cdb/src
+git fetch origin ops/docker-ghcr && git checkout ops/docker-ghcr
+sudo docker build --pull -t cdb-kanban:canary .
+```
+
+- [ ] 3.4. Chạy container thử trên cổng phụ `8001`, dùng env production, rồi kiểm tra:
+
+```bash
+sudo docker run -d --name cdb-canary --read-only --tmpfs /tmp:size=32m \
+  --cap-drop ALL --security-opt no-new-privileges:true -m 256m \
+  --env-file /etc/cdb/app.env -p 127.0.0.1:8001:8000 cdb-kanban:canary
+sleep 5
+curl -fsS http://127.0.0.1:8001/api/health
+sudo docker exec cdb-canary python -c \
+  'import urllib.request as u;print(u.urlopen("http://127.0.0.1:8000/api/health?detail=1").read().decode())'
+sudo docker logs --tail 20 cdb-canary
+```
+
+  Kỳ vọng: health `{"status":"ok",...}`, detail thấy `db_host`/`sslmode=verify-full`
+  (chứng minh CA bundle + `DB_SSLROOTCERT` hoạt động trong image). Nếu fail → sửa/rollback
+  image, **chưa** đụng systemd.
+
+- [ ] 3.5. Chuyển production (downtime vài giây). Gắn tag local để compose dùng được, rồi
+      tắt systemd và bật compose trên `8000`:
+
+```bash
+sudo docker tag cdb-kanban:canary ghcr.io/<owner>/cdb-kanban:local-canary
+sudo install -d -m 755 /opt/cdb
+sudo install -m 644 /opt/cdb/src/infra/ops/docker-compose.yml /opt/cdb/docker-compose.yml
+printf 'CDB_IMAGE=%s\nIMAGE_TAG=%s\n' ghcr.io/<owner>/cdb-kanban local-canary \
+  | sudo tee /opt/cdb/compose.env >/dev/null
+sudo chmod 600 /opt/cdb/compose.env
+sudo docker rm -f cdb-canary
+sudo systemctl disable --now cdb-kanban
+sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml up -d
+```
+
+- [ ] 3.6. Kiểm tra end-to-end (giống `deploy.sh`):
+
+```bash
+curl -fsS http://127.0.0.1:8000/api/health
+curl -fsS -k --resolve kanban.akaine.io.vn:443:127.0.0.1 https://kanban.akaine.io.vn/api/health
+curl -sS -o /dev/null -w '%{http_code}\n' https://kanban.akaine.io.vn/login
+sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml ps
+ss -ltnp | grep 8000
+```
+
+  Kỳ vọng: 200, `cdb-app` healthy, chỉ `127.0.0.1:8000` listen (không phải `0.0.0.0`).
+
+- [ ] 3.7. Sau khi merge + deploy thật xanh **một lần** (workflow Deploy chạy
+      `deploy.sh` với tag SHA `ghcr.io/<owner>/cdb-kanban:<sha>`), mới dọn di sản:
+
+```bash
+sudo systemctl status cdb-kanban        # phải inactive/disabled
+sudo rm -f /etc/systemd/system/cdb-kanban.service
+sudo systemctl daemon-reload
+sudo rm -rf /opt/cdb/venv /opt/cdb/app
+cat /opt/cdb/current_tag /opt/cdb/previous_tag   # phải là tag SHA thật
+```
+
+### Quay lại systemd nếu container lỗi (làm trước bước 3.7)
+
+```bash
+sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml down
+sudo systemctl enable --now cdb-kanban
+sudo systemctl status cdb-kanban --no-pager
+curl -fsS http://127.0.0.1:8000/api/health
+```
+
+`deploy.sh` từ chối chạy khi `cdb-kanban.service` còn active, nên chỉ enable lại khi thật
+sự muốn bỏ container. Sau khi quay lại systemd, `docker compose` không được bật lại.
+
+### Thứ tự bắt buộc
+
+1. `vm.sh` + group docker → 2. build local + canary `8001` → 3. tắt systemd, compose `8000`
+→ 4. verify → 5. merge PR → 6. deploy thật bằng tag SHA → 7. xoá venv/unit.
+
+Không đảo bước 3 và 5: nếu merge trước khi cutover, workflow Deploy sẽ fail ngay ở guard
+`cdb-kanban.service is still active` (an toàn, nhưng production vẫn ở bản cũ).
+
+### Kiểm tra GHCR trước khi merge
+
+- [ ] `docker login ghcr.io -u <github-user> --password-stdin` bằng PAT `read:packages`
+      (hoặc `GITHUB_TOKEN` trong Actions) chạy được từ VM.
+- [ ] Sau lần push `main` đầu tiên: package `cdb-kanban` xuất hiện ở
+      `https://github.com/<owner>?tab=packages`, có tag `<sha>` và `latest`.
+- [ ] Trên VM: `sudo docker pull ghcr.io/<owner>/cdb-kanban:<sha>` thành công trước khi
+      chạy `deploy.sh` lần đầu.

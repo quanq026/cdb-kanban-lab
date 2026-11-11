@@ -5,78 +5,96 @@
 | Mục | Giá trị |
 |---|---|
 | VM | `<VM_IP>` (SSH key-only, port 22 chỉ mở từ IP vận hành) |
-| User deploy | `<deploy-user>` (owner của `/opt/cdb/app`) |
-| App | `/opt/cdb/app`, venv `/opt/cdb/venv`, systemd `cdb-kanban`, nginx site `cdb-kanban` |
-| Secret | `/etc/cdb/app.env` (app) + `/etc/cdb/secrets.env` (owner) — 600 root |
+| User deploy | `<deploy-user>` (thuộc group `docker`, chạy được `docker compose`) |
+| App | container `cdb-app` từ image `ghcr.io/<owner>/cdb-kanban:<sha>` |
+| Compose | `/opt/cdb/docker-compose.yml`, env `/opt/cdb/compose.env` (600), tag `/opt/cdb/current_tag` + `/opt/cdb/previous_tag` |
+| Secret | `/etc/cdb/app.env` (container `env_file`) + `/etc/cdb/secrets.env` (owner) — 600 root |
 
 `/etc/cdb/app.env` chứa `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`,
-`DB_SSLMODE`, `DB_SSLROOTCERT`, `APP_SECRET_KEY`. Không commit file này.
+`DB_SSLMODE`, `DB_SSLROOTCERT`, `APP_SECRET_KEY`. Không commit file này; container chỉ
+mount nó qua `env_file`, không bake vào image.
 
 ## 2. Deploy app
 
 ```text
-push main ──► CI xanh ──► Deploy (workflow_run)
-                              └─ runner tự host trên VM
-                                   └─ sudo bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
+push main ──► CI xanh (test + lint + build/scan image) ──► push GHCR <sha>
+                    └─ xanh ──► Deploy (workflow_run)
+                                   └─ runner tự host trên VM
+                                        └─ sudo env IMAGE_TAG=<sha> IMAGE_REPO=<repo> \
+                                             bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
 ```
 
-`deploy.sh`:
+`deploy.sh` (đọc `IMAGE_TAG` + `IMAGE_REPO`, `DOMAIN` tuỳ chọn):
 
-1. Backup `/opt/cdb/app` + nginx conf vào `/opt/cdb/app/backup-<stamp>/`.
-2. Cài `app/*` + `infra/ops/nginx-*.conf`, `nginx -t`, reload nginx, restart `cdb-kanban`.
-3. Health-check 3 mức, retry 10×2 s: app `:8000`, nginx `:443 --resolve`, `/login`,
-   `/register`. Bất kỳ bước nào fail → `trap ERR` khôi phục backup.
+1. Từ chối chạy nếu `cdb-kanban.service` còn active (cutover chưa xong) hoặc thiếu compose.
+2. `docker pull "$IMAGE_REPO:$IMAGE_TAG"`.
+3. Ghi `previous_tag` (tag đang chạy) rồi `current_tag`, và `/opt/cdb/compose.env`
+   (`CDB_IMAGE`, `IMAGE_TAG`).
+4. `docker compose up -d --remove-orphans` với `infra/ops/docker-compose.yml`.
+5. Health-check 4 mức, retry 10×2 s: app `:8000`, nginx `:443 --resolve`, `/login`,
+   `/register`. Fail → `trap ERR` đưa compose về `previous_tag` rồi exit 1.
+6. Cài nginx conf + real IP, `nginx -t` trước khi reload.
+7. Prune image cũ, giữ 3 tag gần nhất (luôn giữ `current_tag` + `previous_tag`).
 
-Chạy trực tiếp trên VM khi có checkout:
+Chạy tay khi cần (tag phải đã có trên GHCR, thường là SHA của commit đã qua CI):
 
 ```bash
-sudo bash infra/ops/deploy.sh "$PWD"
+sudo env IMAGE_REPO=ghcr.io/<owner>/cdb-kanban IMAGE_TAG=<sha> \
+  bash infra/ops/deploy.sh "$PWD"
 ```
 
-Override khi cần: `APP_OWNER`, `APP_GROUP`, `DOMAIN` (mặc định lấy owner/group của
-`/opt/cdb/app` và domain trong script).
-
 **Asset:** `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css`/`/app.js` lúc khởi động;
-deploy restart nên URL đổi khi nội dung đổi (Cloudflare cache ~4 h).
+container restart nên URL đổi khi nội dung đổi (Cloudflare cache ~4 h).
 
 Kiểm tra sau deploy:
 
 ```bash
 curl -sS https://kanban.akaine.io.vn/api/health
 curl -sS -o /dev/null -w '%{http_code}\n' https://kanban.akaine.io.vn/login
-sudo systemctl is-active cdb-kanban
+sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml ps
+cat /opt/cdb/current_tag /opt/cdb/previous_tag
+sudo docker exec cdb-app python -c \
+  'import urllib.request as u;print(u.urlopen("http://127.0.0.1:8000/api/health?detail=1").read().decode())'
 ```
+
+`?detail=1` chỉ cho localhost, request từ host vào container bị 403; phải chạy bằng
+`docker exec` như trên (từ trong container là `127.0.0.1`).
 
 ## 3. Rollback
 
 ### 3.1. Tự động
 
-`deploy.sh` tự rollback khi lỗi. Backup gần nhất:
+`deploy.sh` tự rollback khi health-check fail: đọc `/opt/cdb/previous_tag`, ghi lại
+`compose.env`, `docker compose up -d` và kiểm tra health, rồi exit 1 (workflow đỏ).
+
+### 3.2. Thủ công về tag trước
 
 ```bash
-ls -1 /opt/cdb/app/backup-*
+sudo cat /opt/cdb/previous_tag
+sudo env IMAGE_REPO=ghcr.io/<owner>/cdb-kanban IMAGE_TAG="$(sudo cat /opt/cdb/previous_tag)" \
+  bash infra/ops/deploy.sh "$PWD"
 ```
 
-### 3.2. Thủ công về một backup
+Hoặc chỉ đổi compose rồi up lại (không đụng nginx):
 
 ```bash
-B=/opt/cdb/app/backup-<stamp>
-OWNER=$(stat -c %U /opt/cdb/app)
-GROUP=$(stat -c %G /opt/cdb/app)
-sudo install -m 644 -o "$OWNER" -g "$GROUP" "$B/app.py" /opt/cdb/app/app.py
-sudo install -m 644 -o "$OWNER" -g "$GROUP" "$B/index.html" /opt/cdb/app/index.html
-# nếu backup có: app.css, app.js, login.html, register.html
-sudo rm -rf /opt/cdb/app/__pycache__
-sudo systemctl restart cdb-kanban
+cd /opt/cdb
+sudo sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$(cat previous_tag)/" compose.env
+sudo docker compose --env-file compose.env -f docker-compose.yml up -d
 ```
 
-Khôi phục nginx + real IP:
+Lưu ý: chạy `deploy.sh` cho tag cũ sẽ ghi đè `previous_tag` bằng tag đang chạy — nếu cần
+giữ cả hai, chép `/opt/cdb/current_tag` trước khi rollback.
+
+### 3.3. Xem và dọn image
 
 ```bash
-sudo install -m 644 "$B/cdb-kanban.conf" /etc/nginx/sites-available/cdb-kanban
-sudo install -m 644 "$B/cloudflare-realip.conf" /etc/nginx/conf.d/cloudflare-realip.conf
-sudo nginx -t && sudo systemctl reload nginx
+sudo docker image ls ghcr.io/<owner>/cdb-kanban
+sudo docker image rm ghcr.io/<owner>/cdb-kanban:<sha>   # tag không còn dùng
 ```
+
+`deploy.sh` đã prune còn 3 tag; xoá tay chỉ khi cần giải phóng đĩa. Không xoá tag đang là
+`current_tag`/`previous_tag`.
 
 ## 4. Migration database
 
@@ -123,8 +141,8 @@ Neon production ──pg_dump -Fc──► cdb-<stamp>.dump + .json (row counts)
 - Secret nằm trong GitHub Environment `backup`, không có trên VM: `NEON_BACKUP_DSN`,
   `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
   `RESTORE_TEST_DSN` (+ tuỳ chọn `NOTIFY_WEBHOOK`). VM chết vẫn backup/restore được.
-- `deploy.sh` vẫn backup app + nginx conf vào `/opt/cdb/app/backup-<stamp>/` trên VM; bản
-  đó chỉ để rollback code, không thay thế backup DB.
+- Backup trên VM chỉ còn lớp image/tag: `/opt/cdb/previous_tag` cho rollback code; không
+  còn thư mục `backup-<stamp>` vì code nằm trong image immutable.
 
 ### 5.2. Lịch, retention, RPO/RTO
 
@@ -133,7 +151,7 @@ Neon production ──pg_dump -Fc──► cdb-<stamp>.dump + .json (row counts)
 | Lịch dump | Hằng ngày 02:17 VN (cron `17 19 * * *` UTC) |
 | Retention | `BACKUP_KEEP` bản `.dump` mới nhất, mặc định 14 (2 tuần); tính **mọi** bản trong bucket, kể cả `workflow_dispatch` chạy tay; mỗi bản có `.json` counts |
 | RPO | ≤ 24 h (mất tối đa dữ liệu phát sinh từ bản dump gần nhất) |
-| RTO | ~10–20 phút (restore vào branch mới, đổi `NEON_HOST`, restart app) |
+| RTO | ~10–20 phút (restore vào branch mới, sửa `DB_HOST` trong `/etc/cdb/app.env`, `docker compose up -d --force-recreate`) |
 | Phạm vi | Logical dump; **chưa** có PITR/WAL, **chưa** diễn tập mất toàn máy/failover |
 
 Counts trong manifest lấy từ **cùng snapshot** với dump: `backup.sh` giữ một transaction
@@ -173,9 +191,11 @@ psql "$TARGET_DSN" -c 'SELECT count(*) FROM users' -c 'SELECT count(*) FROM task
 rm -f ./restore.dump ./cdb-<stamp>.json
 ```
 
-Kiểm tra xong thì trỏ app sang branch mới (`/etc/cdb/secrets.env` → `NEON_HOST`) rồi
-`sudo systemctl restart cdb-kanban`, hoặc promote branch. Không restore đè production đang
-chạy khi chưa có branch dự phòng. Dump chứa dữ liệu thật: không commit, không để trong repo.
+Kiểm tra xong thì trỏ app sang branch mới: `sudoedit /etc/cdb/app.env` đổi `DB_HOST`, cập
+nhật cả `/etc/cdb/secrets.env` (`NEON_HOST`) để lần `vm.sh` sau không ghi đè, rồi
+`sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml up -d
+--force-recreate` — hoặc promote branch. Không restore đè production đang chạy khi chưa có
+branch dự phòng. Dump chứa dữ liệu thật: không commit, không để trong repo.
 
 ### 5.4. Chạy restore test
 
@@ -249,14 +269,18 @@ Chỉ xoá DB/role của project này; không xoá project dùng chung.
 ### 7.3. VM
 
 ```bash
-sudo systemctl disable --now cdb-kanban
-sudo rm -f /etc/systemd/system/cdb-kanban.service /etc/cdb/app.env
+sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml down
+sudo docker image rm $(sudo docker image ls ghcr.io/<owner>/cdb-kanban -q) 2>/dev/null || true
+sudo rm -f /etc/cdb/app.env
 sudo rm -f /etc/nginx/sites-enabled/cdb-kanban /etc/nginx/sites-available/cdb-kanban
 sudo rm -f /etc/nginx/conf.d/cloudflare-realip.conf
-sudo systemctl daemon-reload && sudo systemctl reload nginx
+sudo systemctl reload nginx
 sudo rm -rf /opt/cdb
 sudo rm -f /etc/cdb/secrets.env
 ```
+
+Nếu VM còn di sản systemd của bản cũ: `sudo systemctl disable --now cdb-kanban` và
+`sudo rm -f /etc/systemd/system/cdb-kanban.service /opt/cdb/venv` trước khi xoá `/opt/cdb`.
 
 ### 7.4. TLS/certbot
 
@@ -307,4 +331,7 @@ bật `includeSubDomains`/`preload`.
   chưa diễn tập mất toàn máy/failover.
 - Cert phụ thuộc `certbot.timer`; VM tắt quá lâu có thể hết hạn.
 - Không rate limit (xem [security.md](security.md) §6).
-- `/api/health?detail=1` chỉ xem được từ localhost (SSH vào VM hoặc `ssh -L`).
+- `/api/health?detail=1` chỉ xem được từ localhost (SSH vào VM rồi `docker exec cdb-app
+  python -c ...`, hoặc `ssh -L`).
+- Image arm64 build trên runner `ubuntu-24.04-arm`; đĩa VM chứa tối đa 3 tag image (cộng
+  base layer dùng chung), prune tự động sau mỗi deploy.

@@ -22,6 +22,9 @@
 - NSG: 22 chỉ từ IP vận hành; 80/443 public; không 5432.
 - SSH key-only (`--authentication-type ssh`), `PasswordAuthentication` tắt.
 - App chỉ nghe `127.0.0.1:8000`; nginx là entry duy nhất.
+- Container: non-root `UID 10001`, rootfs `read_only`, chỉ `/tmp` là tmpfs, `cap_drop: ALL`,
+  `no-new-privileges`, `mem_limit` 256 MB. Image không chứa secret; env đọc từ
+  `/etc/cdb/app.env` lúc chạy.
 - Cloudflare proxy ẩn IP origin; đổi IP phải cập nhật DNS/Origin Rule.
 
 ## 4. Secret
@@ -31,6 +34,7 @@
 | `.env` | local, gitignored | biến dev (mẫu ở `.env.example`) |
 | `/etc/cdb/app.env` | 600 root | `DB_*`, `APP_SECRET_KEY` |
 | `/etc/cdb/secrets.env` | 600 root | mật khẩu owner Neon, mật khẩu superuser khi bootstrap |
+| `/opt/cdb/compose.env` | 600 root | `CDB_IMAGE`, `IMAGE_TAG` (không có secret) |
 
 - `.gitignore` chặn `.env*` (trừ `.env.example`), `*.dump`, `*.pem`, `__pycache__/`, `.venv/`.
 - Không file SQL/script nào chứa secret; không in secret ra output.
@@ -84,7 +88,8 @@ App **không** có rate limiter. Hệ quả:
 - Mỗi request: `METHOD path status Xms ip=...`; không body/header/token/mật khẩu.
 - IP thật: nginx `real_ip_header CF-Connecting-IP` chỉ tin dải Cloudflare, ghi đè
   `X-Forwarded-For`; Flask `ProxyFix`. Client không giả được IP trong log.
-- Lỗi 500 trả message chung; stack trace chỉ vào journald.
+- Lỗi 500 trả message chung; stack trace chỉ vào log container (stderr, Docker
+  json-file xoay 10 MB × 3), không lộ ra client.
 
 ## 9. Giới hạn đã biết
 
