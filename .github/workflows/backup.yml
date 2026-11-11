@@ -1,0 +1,123 @@
+name: Backup
+
+# Cron is UTC; VN = UTC+7.
+#   17 19 * * *  -> 02:17 Asia/Ho_Chi_Minh, daily dump + prune
+#   17 3  * * 1  -> 10:17 Asia/Ho_Chi_Minh Monday, restore test only
+on:
+  schedule:
+    - cron: "17 19 * * *"
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      restore_test:
+        description: Run the restore test after the backup
+        type: boolean
+        default: true
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  BACKUP_PREFIX: cdb
+  BACKUP_KEEP: "14"
+
+jobs:
+  backup:
+    name: Dump Neon to R2
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 19 * * *'
+    runs-on: ubuntu-latest
+    environment: backup
+    timeout-minutes: 30
+    env:
+      NEON_BACKUP_DSN: ${{ secrets.NEON_BACKUP_DSN }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" |
+            sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 jq
+          psql --version
+          pg_dump --version | grep -q ' 17\.'
+          aws --version
+
+      - name: Backup
+        run: bash infra/ops/backup.sh
+
+  restore-test:
+    name: Restore newest dump
+    needs: backup
+    if: |
+      always() &&
+      (needs.backup.result == 'success' || needs.backup.result == 'skipped') &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.restore_test) ||
+        (github.event_name == 'schedule' && github.event.schedule == '17 3 * * 1')
+      )
+    runs-on: ubuntu-latest
+    environment: backup
+    timeout-minutes: 30
+    env:
+      NEON_BACKUP_DSN: ${{ secrets.NEON_BACKUP_DSN }}
+      RESTORE_TEST_DSN: ${{ secrets.RESTORE_TEST_DSN }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" |
+            sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 jq
+          psql --version
+          pg_restore --version | grep -q ' 17\.'
+          aws --version
+
+      - name: Restore test
+        run: bash infra/ops/restore-test.sh
+
+  notify:
+    name: Notify failure
+    needs: [backup, restore-test]
+    if: always() && (needs.backup.result == 'failure' || needs.restore-test.result == 'failure')
+    runs-on: ubuntu-latest
+    environment: backup
+    steps:
+      - name: Send webhook
+        env:
+          NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NOTIFY_WEBHOOK:-}" ]; then
+            echo "NOTIFY_WEBHOOK not set, skipping"
+            exit 0
+          fi
+          curl -fsS -m 15 -X POST -H 'Content-Type: application/json' \
+            -d "{\"content\":\"$GITHUB_WORKFLOW failed: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}" \
+            "$NOTIFY_WEBHOOK"
