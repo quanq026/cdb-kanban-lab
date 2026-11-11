@@ -39,7 +39,7 @@ Chi tiết vận hành nâng cao, backup, bảo mật xem tại thư mục [docs
 
 ```
 Caddyfile                Reverse proxy Caddy + tự cấp SSL tự động
-docker-compose.yml       Compose mặc định (app + caddy) cho mọi VPS
+docker-compose.yml       Compose trọn gói (app + db + caddy) cho mọi VPS
 Dockerfile               Image runtime (python:3.12-slim, non-root, healthcheck)
 .dockerignore
 .env.example
@@ -55,19 +55,11 @@ app/                     Mã nguồn ứng dụng
 
 infra/
   setup/
-    schema.sql           DDL users/tasks + index + trigger (idempotent, không seed)
-    seed.sql             Dữ liệu mẫu demo (tuỳ chọn)
-    app_user.sql         Tạo role app_user least-privilege với password qua biến
-  ops/
-    backup.sh            pg_dump Neon -> R2 (chạy trên GitHub Actions)
-  migrations/            SQL migration up/down
-
-deploy/
-  azure/                 (Tuỳ chọn) Cấu hình triển khai Azure VM + Nginx + Runner + GHCR
+    schema.sql           DDL users/tasks + index + trigger
+    seed.sql             Dữ liệu mẫu demo
 
 .github/
   workflows/ci.yml       Test Postgres 17 + lint + build/scan/push image arm64
-  workflows/backup.yml   Backup Neon ra R2 hằng ngày
   dependabot.yml         pip, github-actions, docker (hằng tuần)
   scripts/ci-smoke.py    59 case Flask test client
 
@@ -76,12 +68,12 @@ docs/                    Tài liệu chi tiết hệ thống
 
 ## Chạy local dev
 
-Yêu cầu: Python 3.12+ và database Postgres 17.
+Yêu cầu: Python 3.12+ và database Postgres 17 (hoặc chạy `docker compose up db -d`).
 
 1. Điền `.env`:
    ```bash
    cp .env.example .env
-   # Điền DB_* và APP_SECRET_KEY
+   # Điền DOMAIN=localhost và APP_SECRET_KEY
    ```
 2. Cài dependency và chạy app:
    ```bash
@@ -97,9 +89,7 @@ Yêu cầu: Python 3.12+ và database Postgres 17.
 
 ## CI/CD
 
-- **CI (`.github/workflows/ci.yml`):** Chạy khi push/PR `main`: khởi động container service Postgres 17, áp `schema.sql`, `seed.sql`, `app_user.sql`, kiểm tra syntax (`py_compile`, `node --check`, `bash -n`), lint (`ruff`, `shellcheck`, `actionlint`), chạy 59 test cases smoke test. Sau đó build image arm64 và scan bảo mật bằng Trivy.
-- **Backup (`.github/workflows/backup.yml`):** Cron hằng ngày dump Neon bằng container `postgres:17` và tải lên Cloudflare R2.
-- **Deploy Azure (tuỳ chọn):** Xem hướng dẫn trong [deploy/azure/README.md](deploy/azure/README.md).
+- **CI (`.github/workflows/ci.yml`):** Tự động kích hoạt khi push/PR `main`: khởi động container service Postgres 17, nạp `schema.sql` và `seed.sql`, kiểm tra syntax (`py_compile`, `node --check`), chạy lint (`ruff`, `actionlint`), chạy 59 test cases smoke test. Sau đó build image arm64 và scan bảo mật bằng Trivy.
 
 ## Tài liệu
 
@@ -107,10 +97,8 @@ Yêu cầu: Python 3.12+ và database Postgres 17.
 |---|---|
 | Hệ thống ghép thế nào, schema ra sao | [docs/architecture.md](docs/architecture.md) |
 | Gọi API nào, mã lỗi nào | [docs/api.md](docs/api.md) |
-| Vận hành, migration, backup & restore | [docs/operations.md](docs/operations.md) |
-| Mô hình bảo mật và đánh đổi | [docs/security.md](docs/security.md) |
+| Vận hành và bảo mật | [docs/operations.md](docs/operations.md) · [docs/security.md](docs/security.md) |
 | Kiểm thử và test cases | [docs/testing.md](docs/testing.md) |
-| Các bước cấu hình thủ công | [docs/runbook-manual.md](docs/runbook-manual.md) |
 
 ## Giới hạn
 

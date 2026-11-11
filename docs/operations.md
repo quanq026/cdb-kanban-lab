@@ -85,8 +85,7 @@ sudo docker exec cdb-app python -c \
 - Đọc `/opt/cdb/previous_tag`, ghi lại `compose.env`, `docker compose up -d`, kiểm tra
   health, rồi exit 1 (workflow đỏ).
 - Nếu **chưa có `previous_tag`** (lần deploy container đầu tiên) thì không thể rollback
-  bằng tag: script báo rõ và exit 1. Quay lại systemd theo
-  [runbook-manual.md](runbook-manual.md) §3.
+  bằng tag: script báo rõ và exit 1.
 
 ### 3.2. Thủ công về tag trước
 
