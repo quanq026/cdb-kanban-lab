@@ -2,7 +2,7 @@
 """CI smoke test for the Flask app using a real PostgreSQL database.
 
 Runs the app through Flask's test client instead of a live HTTP server, so CI
-does not need gunicorn or nginx. The GitHub Actions workflow starts postgres:17,
+does not need gunicorn or Caddy. The GitHub Actions workflow starts postgres:17,
 applies infra/setup/schema.sql, creates app_user, then runs this file.
 
 Required env: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, APP_SECRET_KEY.
