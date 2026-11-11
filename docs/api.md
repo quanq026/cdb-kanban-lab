@@ -14,7 +14,7 @@ Base URL: `https://<domain>`. Mọi response API là JSON; lỗi luôn có dạn
 | `user_id` không khớp session | `403 {"code":"forbidden_user"}` |
 | Task không tồn tại **hoặc** của user khác | `404 {"code":"not_found"}` |
 
-`/api/login`, `/api/register`, `/api/health` là công khai. Mọi endpoint khác cần session.
+`/api/login`, `/api/register`, `/api/health`, `/api/check-domain` là công khai. Mọi endpoint khác cần session.
 
 ## 2. Endpoint
 
@@ -26,6 +26,7 @@ Base URL: `https://<domain>`. Mọi response API là JSON; lỗi luôn có dạn
 | GET | `/api/me` | – | `{user:{id,email}}`; chưa đăng nhập → `401` |
 | GET | `/api/health` | – | `{status, db_user, ok}` — không lộ host/database/sslmode |
 | GET | `/api/health?detail=1` | chỉ `127.0.0.1`/`::1` | thêm `database`, `backend_addr`, `db_host`, `sslmode`; ngoài localhost → `403 forbidden` |
+| GET | `/api/check-domain` | `domain` | `200` nếu khớp `DOMAIN`, `403` nếu không; phục vụ Caddy On-Demand TLS |
 | GET | `/api/users` | – | Chỉ trả chính user đang đăng nhập (giữ để tương thích UI cũ) |
 | GET | `/api/tasks?user_id=` | `user_id` khớp session | Danh sách task của user, sắp theo `position, id` |
 | POST | `/api/tasks` | `{user_id, title}` | `201`, task mới ở `todo`, append cuối cột (`position = max + 1`) |

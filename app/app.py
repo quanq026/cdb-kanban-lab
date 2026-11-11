@@ -23,7 +23,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 LOCAL_IPS = ("127.0.0.1", "::1")
 PUBLIC_PATHS = frozenset((
     "/login", "/register", "/app.css", "/app.js", "/favicon.ico",
-    "/api/login", "/api/register", "/api/health",
+    "/api/login", "/api/register", "/api/health", "/api/check-domain",
 ))
 CSP = (
     "default-src 'self'; img-src 'self' data:; style-src 'self'; "
@@ -499,6 +499,18 @@ def delete_task(task_id):
     if row is None:
         return fail(404, "task not found for this user", "not_found")
     return jsonify(row)
+
+
+@app.get("/api/check-domain")
+def check_domain():
+    domain = request.args.get("domain", "").strip().lower().split(":")[0]
+    allowed = os.environ.get("DOMAIN", "").strip().lower().split(":")[0]
+    allowed_domains = {allowed} if allowed else set()
+    if allowed in ("", "localhost", "127.0.0.1"):
+        allowed_domains.update({"localhost", "127.0.0.1"})
+    if domain and domain in allowed_domains:
+        return "", 200
+    return "forbidden", 403
 
 
 @app.get("/api/health")

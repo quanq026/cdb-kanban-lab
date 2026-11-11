@@ -50,7 +50,7 @@ Container ứng dụng (`cdb-app`) được cấu hình nghiêm ngặt trong `do
 
 ## 5. TLS / HTTPS & Edge
 
-- **Tự động cấp phát chứng chỉ**: Caddy tự động đăng ký và gia hạn chứng chỉ TLS từ Let's Encrypt / ZeroSSL qua cơ chế ACME HTTP-01 / TLS-ALPN-01.
+- **Tự động cấp phát chứng chỉ On-Demand**: Caddy đăng ký và gia hạn chứng chỉ TLS từ Let's Encrypt / ZeroSSL qua cơ chế On-Demand TLS (`tls { on_demand }`). Caddy chỉ xin cert khi có kết nối thực tế đầu tiên và xác thực tên miền qua endpoint an toàn `/api/check-domain`, giúp tránh lỗi ACME backoff nếu dev mở cổng 80/443 sau khi khởi động compose.
 - **Ép buộc HTTPS**: Mọi truy cập qua cổng 80 đều được tự động chuyển hướng sang 443 với mã HTTP 301.
 - **Tương thích Cloudflare Proxy**: Nếu người dùng trỏ domain qua Cloudflare, khuyến nghị đặt chế độ SSL là **Full (strict)** để mã hóa đầu cuối giữa Cloudflare và VPS.
 - **Security Headers được tích hợp sẵn**:
