@@ -38,7 +38,7 @@ app/                     Ứng dụng (deploy vào /opt/cdb/app)
 infra/
   setup/
     schema.sql           DDL users/tasks + index + trigger (CI dùng)
-    vm.sh                swap, Docker, nginx, psql 17, venv, systemd unit
+    vm.sh                swap, nginx, psql 17, venv, systemd unit
     https.sh             Let's Encrypt + nginx TLS + renewal hook
   ops/
     deploy.sh            backup + install + health + rollback
