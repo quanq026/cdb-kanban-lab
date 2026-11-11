@@ -62,8 +62,8 @@ container restart nên URL đổi khi nội dung đổi (Cloudflare cache ~4 h).
 Kiểm tra sau deploy:
 
 ```bash
-curl -sS https://kanban.akaine.io.vn/api/health
-curl -sS -o /dev/null -w '%{http_code}\n' https://kanban.akaine.io.vn/login
+curl -sS https://<domain>/api/health
+curl -sS -o /dev/null -w '%{http_code}\n' https://<domain>/login
 sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml ps
 cat /opt/cdb/current_tag /opt/cdb/previous_tag
 sudo docker exec cdb-app python -c \
@@ -85,8 +85,7 @@ sudo docker exec cdb-app python -c \
 - Đọc `/opt/cdb/previous_tag`, ghi lại `compose.env`, `docker compose up -d`, kiểm tra
   health, rồi exit 1 (workflow đỏ).
 - Nếu **chưa có `previous_tag`** (lần deploy container đầu tiên) thì không thể rollback
-  bằng tag: script báo rõ và exit 1. Quay lại systemd theo
-  [runbook-manual.md](runbook-manual.md) §3.
+  bằng tag: script báo rõ và exit 1.
 
 ### 3.2. Thủ công về tag trước
 
@@ -230,7 +229,7 @@ branch dự phòng. Dump chứa dữ liệu thật: không commit, không để 
 
 | Mục | Giá trị |
 |---|---|
-| Cert origin | `/etc/letsencrypt/live/kanban.akaine.io.vn/` |
+| Cert origin | `/etc/letsencrypt/live/<domain>/` |
 | Gia hạn | `certbot.timer` + deploy hook reload nginx |
 | ACME | HTTP-01 webroot `/var/www/letsencrypt` |
 | Cloudflare | `ssl=strict`, `min_tls_version=1.2`, `always_use_https=on`, HTTP/3 + Brotli |
@@ -289,7 +288,7 @@ Nếu VM còn di sản systemd của bản cũ: `sudo systemctl disable --now cd
 ### 7.4. TLS/certbot
 
 ```bash
-sudo certbot delete --cert-name kanban.akaine.io.vn
+sudo certbot delete --cert-name <domain>
 sudo systemctl disable --now certbot.timer
 sudo apt-get remove -y certbot
 sudo rm -rf /var/www/letsencrypt

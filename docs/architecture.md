@@ -38,11 +38,11 @@ nginx :80 → 301 HTTPS (chừa /.well-known/acme-challenge/ cho ACME HTTP-01)
 | Runtime | Docker container `cdb-app`: python:3.12-slim, gunicorn 2 worker, Flask 3.1, psycopg 3.3, psycopg_pool 3.3 |
 | Image | `ghcr.io/<owner>/cdb-kanban:<sha>` (build arm64 trong CI, tag `latest` không dùng để deploy) |
 | App dir | `/app` trong image; compose + tag hiện tại ở `/opt/cdb/` |
-| Service | `docker compose` (`infra/ops/docker-compose.yml` → `/opt/cdb/docker-compose.yml`), restart `unless-stopped` |
-| nginx | site `cdb-kanban` + `conf.d/cloudflare-realip.conf` |
+| Service | `docker compose`, restart `unless-stopped` |
+| Web / Proxy | Caddy (tự cấp SSL) hoặc Nginx reverse proxy |
 | Neon | DB `studydb`, role `app_user`, endpoint trực tiếp (không `-pooler`) |
-| Domain | `kanban.akaine.io.vn` → Cloudflare proxy → origin |
-| Cert origin | Let's Encrypt `CN=kanban.akaine.io.vn` |
+| Domain | `<domain>` → Proxy → App |
+| Cert origin | Let's Encrypt `CN=<domain>` |
 
 ## 3. Data model
 

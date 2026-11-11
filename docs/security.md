@@ -48,7 +48,7 @@
 
 - Cloudflare `ssl=strict` (xác minh cert origin), `min_tls_version=1.2`; TLS 1.0/1.1 bị
   từ chối; HTTP/3 + Brotli bật.
-- Origin: Let's Encrypt `CN=kanban.akaine.io.vn`, TLS 1.2/1.3, HTTP/2; private key root 600.
+- Origin: Let's Encrypt `CN=<domain>`, TLS 1.2/1.3, HTTP/2; private key root 600.
 - `http://` (kể cả theo IP) → 301 HTTPS; ACME path được miễn redirect.
 - HSTS `max-age=15552000` (không `includeSubDomains`/`preload` để còn rollback).
 - Header: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,

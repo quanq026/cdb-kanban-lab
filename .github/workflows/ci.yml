@@ -23,13 +23,13 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: ci-app-password
           POSTGRES_DB: studydb
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d studydb"
+          --health-cmd "pg_isready -U app_user -d studydb"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -63,23 +63,15 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
 
-      - name: Apply schema and create app_user
+      - name: Apply schema and seed
         env:
-          PGPASSWORD: postgres
+          PGPASSWORD: ci-app-password
         run: |
           set -euo pipefail
-          psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 \
+          psql -h 127.0.0.1 -U app_user -d studydb -v ON_ERROR_STOP=1 \
             -f infra/setup/schema.sql
-          psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE ROLE app_user LOGIN PASSWORD 'ci-app-password';
-          GRANT CONNECT ON DATABASE studydb TO app_user;
-          GRANT USAGE ON SCHEMA public TO app_user;
-          GRANT SELECT, INSERT, UPDATE, DELETE ON users, tasks TO app_user;
-          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
-          SQL
-          is_super=$(psql -h 127.0.0.1 -U postgres -d studydb -tAc \
-            "SELECT rolsuper FROM pg_roles WHERE rolname = 'app_user'")
-          test "$is_super" = "f"
+          psql -h 127.0.0.1 -U app_user -d studydb -v ON_ERROR_STOP=1 \
+            -f infra/setup/seed.sql
 
       - name: Syntax checks
         run: |
