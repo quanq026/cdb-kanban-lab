@@ -18,13 +18,13 @@ fi
 SRC="$(cd "$SRC" && pwd)"
 
 APP=/opt/cdb/app
-OWNER=azureuser
-GROUP=azureuser
+OWNER="${APP_OWNER:-$(stat -c %U "$APP" 2>/dev/null || id -un)}"
+GROUP="${APP_GROUP:-$(stat -c %G "$APP" 2>/dev/null || id -gn)}"
 MANAGED="app.py index.html login.html register.html app.css app.js"
 REQUIRED="app.py index.html app.css app.js"
 NGINX_SITE=/etc/nginx/sites-available/cdb-kanban
 CF_REALIP=/etc/nginx/conf.d/cloudflare-realip.conf
-DOMAIN=kanban.akaine.io.vn
+DOMAIN="${DOMAIN:-kanban.akaine.io.vn}"
 
 for f in $REQUIRED; do
   if [ ! -f "$SRC/app/$f" ]; then
@@ -98,8 +98,7 @@ systemctl restart cdb-kanban
 wait_http() {
   local label=$1
   shift
-  local i
-  for i in 1 2 3 4 5 6 7 8 9 10; do
+  for _ in {1..10}; do
     if curl -fsS --max-time 10 "$@" >/dev/null 2>&1; then
       echo "check_$label=ok"
       return 0
