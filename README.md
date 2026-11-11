@@ -12,7 +12,7 @@
 
 **Yêu cầu:** VPS (Ubuntu/Debian) đã cài Docker & Docker Compose, 1 domain trỏ về IP VPS.
 
-### 3 bước triển khai:
+### 4 bước triển khai:
 1. Clone repo: `git clone <repo-url> && cd cdb-kanban-lab`
 2. Tạo file cấu hình: `cp .env.example .env`
    - Điền `DOMAIN=<your-domain.com>`
@@ -25,6 +25,13 @@
 > **Đổi mật khẩu DB (tùy chọn):** Mật khẩu DB nội bộ đã được cấu hình mặc định sẵn. Nếu muốn đổi, hãy bỏ comment `DB_PASSWORD=<mật khẩu>` trong `.env` **trước** lần `docker compose up` đầu tiên (vì Postgres chỉ nhận mật khẩu khi khởi tạo volume lần đầu). Nếu đã khởi chạy trước đó, bạn có 2 cách:
 > 1. Chạy `docker compose down -v` (xoá dữ liệu) rồi up lại; hoặc
 > 2. Đổi mật khẩu trực tiếp: `docker exec -it cdb-db psql -U app_user -d studydb -c "ALTER USER app_user PASSWORD '<mật khẩu mới>'"` rồi cập nhật `DB_PASSWORD` trong `.env` và chạy `docker compose up -d`.
+
+> [!NOTE]
+> **Dùng Database bên ngoài (PostgreSQL độc lập / Neon):**
+> Điền các thông số kết nối vào `.env`: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` và `DB_SSLMODE=verify-full` (hoặc `require`). Sau đó khởi chạy mà không cần bật service db nội bộ bằng tùy chọn `--no-deps`:
+> ```bash
+> docker compose up -d --no-deps --build app caddy
+> ```
 
 ### Cập nhật khi có bản mới:
 ```bash
