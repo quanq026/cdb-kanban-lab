@@ -6,8 +6,10 @@
 # Optional env: BACKUP_PREFIX (default cdb).
 #
 # RESTORE_TEST_DSN must point at a throwaway Neon branch/database owned by a
-# role that can create/drop objects; the script refuses to touch the
-# production database.
+# role that can create/drop objects. The script refuses to run when the test
+# DSN matches the production DSN, or shares its host, or shares its database
+# name (a Neon branch normally reuses the production database name, so create a
+# dedicated database such as restoretest inside the branch).
 set -euo pipefail
 
 need() {
@@ -25,9 +27,47 @@ need R2_BUCKET
 need R2_ACCESS_KEY_ID
 need R2_SECRET_ACCESS_KEY
 
-if [ "$RESTORE_TEST_DSN" = "$NEON_BACKUP_DSN" ]; then
-  echo "RESTORE_TEST_DSN must not be the production database" >&2
+# postgresql://[user[:pass]@][host][:port][/dbname][?params]
+dsn_host() {
+  local rest=${1#*://}
+  rest=${rest##*@}
+  rest=${rest%%/*}
+  rest=${rest%%\?*}
+  rest=${rest%:*}
+  printf '%s' "$rest" | tr '[:upper:]' '[:lower:]'
+}
+
+dsn_db() {
+  local rest=${1#*://}
+  rest=${rest##*@}
+  if [ "$rest" = "${rest#*/}" ]; then
+    printf ''
+    return 0
+  fi
+  rest=${rest#*/}
+  rest=${rest%%\?*}
+  printf '%s' "$rest"
+}
+
+refuse() {
+  echo "$1" >&2
   exit 2
+}
+
+if [ "$RESTORE_TEST_DSN" = "$NEON_BACKUP_DSN" ]; then
+  refuse "RESTORE_TEST_DSN must not be the production database"
+fi
+
+PROD_HOST="$(dsn_host "$NEON_BACKUP_DSN")"
+TEST_HOST="$(dsn_host "$RESTORE_TEST_DSN")"
+PROD_DB="$(dsn_db "$NEON_BACKUP_DSN")"
+TEST_DB="$(dsn_db "$RESTORE_TEST_DSN")"
+
+if [ -n "$PROD_HOST" ] && [ "$PROD_HOST" = "$TEST_HOST" ]; then
+  refuse "RESTORE_TEST_DSN uses the production host ($PROD_HOST)"
+fi
+if [ -n "$PROD_DB" ] && [ "$PROD_DB" = "$TEST_DB" ]; then
+  refuse "RESTORE_TEST_DSN uses the production database name ($PROD_DB); use a dedicated database"
 fi
 
 PREFIX="${BACKUP_PREFIX:-cdb}"
