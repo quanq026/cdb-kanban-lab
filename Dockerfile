@@ -5,6 +5,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# The slim base can lag Debian security updates (e.g. zlib1g HIGH CVEs). Pull the
+# distro-patched package at build time so the scan does not fail on the base layer.
+# Re-check this after a base image bump; remove it once the base ships the fix.
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --system --uid 10001 --user-group --home-dir /app app
 
 COPY app/requirements.txt /tmp/requirements.txt
