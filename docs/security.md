@@ -17,13 +17,11 @@ Tài liệu mô tả chi tiết các biện pháp và kiến trúc bảo mật c
 
 | Cổng | Giao thức | Phạm vi truy cập | Mục đích |
 |---|---|---|---|
-| `80` | HTTP | Toàn cầu (Public) | Nhận request từ người dùng; Caddy tự động chuyển hướng 301 sang HTTPS |
-| `443` | HTTPS | Toàn cầu (Public) | Điểm truy cập web chính thống, mã hóa TLS |
-| `5432` | PostgreSQL | Nội bộ host (`127.0.0.1`) | Chỉ mở cho chính máy host để chạy dev local; **không** mở ra Internet |
-| `8000` | HTTP | Mạng nội bộ Docker | Gunicorn lắng nghe trong mạng bridge nội bộ; chỉ Caddy mới gọi tới |
+| `80` | HTTP (TCP) | Toàn cầu (Public) | Nhận request từ người dùng; Caddy tự động chuyển hướng 301 sang HTTPS |
+| `443` | HTTPS (TCP / UDP) | Toàn cầu (Public) | Điểm truy cập web chính thống, mã hóa TLS / HTTP/3 qua Caddy |
 
 - Caddy là cổng ngõ duy nhất tiếp nhận request từ bên ngoài Internet.
-- Giao tiếp giữa Caddy, Flask App và PostgreSQL Container hoàn toàn nằm trên mạng ảo Docker riêng biệt.
+- Container database (`postgres:17-alpine`) và app (`cdb-app`) chỉ giao tiếp qua mạng bridge nội bộ của Docker; cổng 5432 và 8000 hoàn toàn không publish ra máy host hay Internet.
 
 ---
 
