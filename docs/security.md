@@ -12,14 +12,14 @@
 
 - App kết nối bằng `app_user`: `rolsuper=false`, `createdb=false`, `createrole=false`,
   không `BYPASSRLS`; chỉ có `SELECT/INSERT/UPDATE/DELETE` trên `users`/`tasks`.
-- Role owner chỉ dùng cho migration/purge, lấy từ `/etc/cdb/secrets.env` (600 root).
-- `5432` không mở Internet; container local chỉ publish `127.0.0.1:55432`.
+- Role owner chỉ dùng cho migration, lấy từ `/etc/cdb/secrets.env` (600 root).
+- `5432` không mở Internet; app chỉ nghe loopback `127.0.0.1:8000`.
 - `sslmode=verify-full` + CA bundle Ubuntu (`DB_SSLROOTCERT`), **không** tắt xác minh.
 - Mọi SQL tham số hoá; `DELETE`/`PATCH` luôn kèm `user_id` trong `WHERE`.
 
 ## 3. Mạng & SSH
 
-- NSG: 22 chỉ từ IP vận hành hiện tại; 80/443 public; không 5432.
+- NSG: 22 chỉ từ IP vận hành; 80/443 public; không 5432.
 - SSH key-only (`--authentication-type ssh`), `PasswordAuthentication` tắt.
 - App chỉ nghe `127.0.0.1:8000`; nginx là entry duy nhất.
 - Cloudflare proxy ẩn IP origin; đổi IP phải cập nhật DNS/Origin Rule.
@@ -28,15 +28,12 @@
 
 | File | Quyền | Nội dung |
 |---|---|---|
-| `.env`, `.env.azure` | local, gitignored | mật khẩu lab, Neon owner, API key |
+| `.env` | local, gitignored | biến dev (mẫu ở `.env.example`) |
 | `/etc/cdb/app.env` | 600 root | `DB_*`, `APP_SECRET_KEY` |
-| `/etc/cdb/secrets.env` | 600 root | mật khẩu local + owner Neon + API key |
-| `login-azure.ps1` | gitignored | hardcode Azure client secret — **nếu từng bị chia sẻ, phải rotate** |
+| `/etc/cdb/secrets.env` | 600 root | mật khẩu owner Neon, mật khẩu superuser khi bootstrap |
 
-- `.gitignore` chặn `.env*`, `*.dump`, `*.pem`, `login-azure.ps1`, `__pycache__/`, `.venv/`.
-- Không file SQL/script nào chứa secret; không in secret ra output (script chỉ in
-  `already-set`/độ dài).
-- Đã quét journald + nginx log: 0 lần xuất hiện mật khẩu Neon.
+- `.gitignore` chặn `.env*` (trừ `.env.example`), `*.dump`, `*.pem`, `__pycache__/`, `.venv/`.
+- Không file SQL/script nào chứa secret; không in secret ra output.
 - `APP_SECRET_KEY` đổi = mọi session cũ mất hiệu lực.
 
 ## 5. TLS & edge
@@ -65,11 +62,10 @@
 
 ### Rate limit — đánh đổi đã chấp nhận
 
-Theo yêu cầu, **đã bỏ toàn bộ** limiter: ghi 60/phút, login 8 lần sai/5 phút, đăng ký
-5 tài khoản/giờ. Hệ quả:
+App **không** có rate limiter. Hệ quả:
 
 - Không chống spam ghi, dò mật khẩu hay đăng ký hàng loạt ở tầng app.
-- Không còn bộ đếm in-memory; restart không ảnh hưởng.
+- Không có bộ đếm in-memory; restart không ảnh hưởng.
 - Giảm rủi ro bằng: mật khẩu tối thiểu 8 + scrypt, log request kèm IP thật, và có thể bật
   rate limiting/WAF ở Cloudflare nếu triển khai thật. Đây là phạm vi demo.
 
@@ -96,16 +92,15 @@ Theo yêu cầu, **đã bỏ toàn bộ** limiter: ghi 60/phút, login 8 lần s
 - HSTS 180 ngày: browser đã truy cập vẫn ép HTTPS kể cả khi rollback.
 - `ssl=strict` áp cho cả zone `akaine.io.vn`; apex đang 522 vì origin riêng không truy cập
   được. Nếu trỏ apex về origin khác, origin đó phải có cert hợp lệ (nếu không → 526).
-- Cert hết hạn 2027-02-07; phụ thuộc `certbot.timer` (đã dry-run PASS).
+- Cert phụ thuộc `certbot.timer`; VM tắt quá lâu có thể hết hạn.
 - CSP không cho inline script/style.
 - `/api/health?detail=1` chỉ localhost.
 
 ## 10. Checklist trước khi chia sẻ/đổi môi trường
 
-- [ ] `git status` không có `.env*`, `*.dump`, `*.pem`, `login-azure.ps1`.
+- [ ] `git status` không có `.env`, `*.dump`, `*.pem`, hay file credential.
 - [ ] Không in secret trong log/CI; rotate nếu nghi ngờ.
 - [ ] `APP_SECRET_KEY` mới khi đổi môi trường.
 - [ ] NSG SSH đúng IP hiện tại.
 - [ ] `certbot renew --dry-run` PASS.
-- [ ] Chạy `.github/scripts/ci-smoke.py` (hoặc để CI trên GitHub Actions chạy) và kiểm tra
-  dữ liệu test đã được dọn (`purge-test-accounts.sh` nếu chạy tay).
+- [ ] CI xanh (`.github/scripts/ci-smoke.py`) và dữ liệu test tự dọn.
