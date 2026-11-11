@@ -3,10 +3,17 @@ name: Backup
 # Cron is UTC; VN = UTC+7.
 #   17 19 * * *  -> 02:17 Asia/Ho_Chi_Minh, daily dump + prune
 #   17 3  * * 1  -> 10:17 Asia/Ho_Chi_Minh Monday, restore test only
+#   47 20 * * *  -> 03:47 Asia/Ho_Chi_Minh, freshness check (newest dump <= 36h)
+#
+# GitHub disables scheduled workflows after 60 days without repository activity.
+# A scheduled keepalive cannot fix that (it gets disabled too): trigger
+# workflow_dispatch from an external cron, or run the monthly check in
+# docs/runbook-manual.md section 2.
 on:
   schedule:
     - cron: "17 19 * * *"
     - cron: "17 3 * * 1"
+    - cron: "47 20 * * *"
   workflow_dispatch:
     inputs:
       restore_test:
@@ -102,10 +109,47 @@ jobs:
       - name: Restore test
         run: bash infra/ops/restore-test.sh
 
+  freshness:
+    name: Check latest dump age
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '47 20 * * *'
+    runs-on: ubuntu-latest
+    environment: backup
+    timeout-minutes: 10
+    env:
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Fail when the newest dump is older than 36h
+        run: |
+          set -euo pipefail
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          export AWS_DEFAULT_REGION=auto
+          line="$(aws --endpoint-url "$R2_ENDPOINT" s3 ls "s3://$R2_BUCKET/$BACKUP_PREFIX/" |
+            grep -E '\.dump$' | sort -r | head -n1)"
+          if [ -z "$line" ]; then
+            echo "no backup objects under s3://$R2_BUCKET/$BACKUP_PREFIX/" >&2
+            exit 1
+          fi
+          stamp="$(echo "$line" | awk '{print $1" "$2}')"
+          age=$(($(date -u +%s) - $(date -u -d "$stamp" +%s)))
+          echo "newest dump: $stamp (${age}s old)"
+          if [ "$age" -gt 129600 ]; then
+            echo "newest dump is older than 36h" >&2
+            exit 1
+          fi
+
   notify:
     name: Notify failure
-    needs: [backup, restore-test]
-    if: always() && (needs.backup.result == 'failure' || needs.restore-test.result == 'failure')
+    needs: [backup, restore-test, freshness]
+    if: |
+      always() && (
+        needs.backup.result == 'failure' ||
+        needs.restore-test.result == 'failure' ||
+        needs.freshness.result == 'failure'
+      )
     runs-on: ubuntu-latest
     environment: backup
     steps:
