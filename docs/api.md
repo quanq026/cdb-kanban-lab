@@ -102,7 +102,7 @@ Backend validate lại toàn bộ; client chỉ validate để phản hồi nhan
 - **Health chi tiết** (localhost): thêm `db_host`, `database`, `backend_addr`, `sslmode`;
   chống giả IP bằng cách kiểm tra `remote_addr` sau `ProxyFix`.
 - **Cache**: `/`, `/login`, `/register`, `/api/*` → `no-store`; `app.css`/`app.js` →
-  `no-cache` ở origin (Cloudflare vẫn cache; bump `?v=`).
+  `no-cache` ở origin; URL trong HTML có `?v=<hash>` do app tự sinh.
 - **Security header** (app): `X-Content-Type-Options`, `X-Frame-Options`,
   `Referrer-Policy`, `Permissions-Policy`, `Content-Security-Policy` (`default-src 'self'`).
   HSTS đặt ở nginx.

@@ -60,7 +60,8 @@ Deploy tự chạy sau CI xanh trên `main` qua self-hosted runner `cdb-vm`; xem
 ## 4. Nguyên tắc khi sửa
 
 1. Sửa hành vi → chạy `ci-smoke.py` + kiểm tay các luồng chính.
-2. Sửa UI → kiểm browser thật (desktop/mobile, light/dark, kéo–thả); bump `?v=` nếu đổi CSS/JS.
+2. Sửa UI → kiểm browser thật (desktop/mobile, light/dark, kéo–thả); `?v=` tự sinh từ
+   nội dung asset, không sửa tay.
 3. Sửa schema → migration up/down + diễn tập rollback trong transaction + smoke test.
 4. Test/seed phải tự dọn dữ liệu; không để lại tài khoản test trên production.
 5. Không đưa secret vào test; không in mật khẩu/hash ra output.

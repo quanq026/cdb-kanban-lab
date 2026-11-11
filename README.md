@@ -98,8 +98,8 @@ push main ──► CI (ubuntu-latest): Postgres 17 + schema + ci-smoke.py + lin
   outbound HTTPS, không mở SSH cho GitHub).
 - `deploy.sh` backup `/opt/cdb/app` + nginx conf vào `/opt/cdb/app/backup-<stamp>/`, cài
   file, `nginx -t`, reload, restart, health-check retry 10×2 s; lỗi → tự rollback.
-- Mỗi lần đổi `app.css`/`app.js` phải tăng `?v=` trong **cả ba** HTML (Cloudflare cache
-  asset ~4 h).
+- `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css` và `/app.js` một lần lúc khởi động;
+  deploy restart nên asset mới có URL mới (Cloudflare cache ~4 h).
 
 Chạy lại deploy thủ công:
 
