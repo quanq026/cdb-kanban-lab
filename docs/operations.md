@@ -118,6 +118,10 @@ Dump chứa dữ liệu thật: không commit, không để trong repo.
 | Cloudflare | `ssl=strict`, `min_tls_version=1.2`, `always_use_https=on`, HTTP/3 + Brotli |
 | Header | HSTS 180 ngày, nosniff, SAMEORIGIN, Referrer-Policy, Permissions-Policy |
 
+Đổi domain: sửa cả biến `DOMAIN` (`deploy.yml` hoặc env khi chạy tay) và
+`infra/ops/nginx-cdb.conf` (redirect, `server_name`, đường dẫn cert), rồi chạy lại
+`infra/setup/https.sh`.
+
 ```bash
 sudo certbot certificates
 sudo certbot renew --dry-run

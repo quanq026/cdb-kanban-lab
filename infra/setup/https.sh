@@ -8,7 +8,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-DOMAIN="kanban.akaine.io.vn"
+DOMAIN="${DOMAIN:-kanban.akaine.io.vn}"
 WEBROOT=/var/www/letsencrypt
 SITE=/etc/nginx/sites-available/cdb-kanban
 ENABLED=/etc/nginx/sites-enabled/cdb-kanban
