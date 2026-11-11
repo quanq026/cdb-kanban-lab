@@ -36,7 +36,7 @@ az vm create -g rg-demo -n vm-cdb `
 Sau đó mở NSG 80/443 public, 22 chỉ từ IP hiện tại (không mở 5432), rồi:
 
 ```powershell
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\vm\01-provision.sh
+powershell -File infra\ops\run-remote.ps1 -Path infra\setup\vm.sh
 ```
 
 ### 2.2. Cập nhật app (CI/CD)
@@ -50,7 +50,7 @@ gh run watch
 Luồng:
 
 1. `CI` (`.github/workflows/ci.yml`) chạy trên `ubuntu-latest`: Postgres 17 service,
-   apply `infra/setup/db/schema.sql`, tạo `app_user` least-privilege, syntax check
+   apply `infra/setup/schema.sql`, tạo `app_user` least-privilege, syntax check
    (`py_compile`, `node --check`, `bash -n`) rồi `.github/scripts/ci-smoke.py` (57 case qua
    Flask test client).
 2. `Deploy` (`.github/workflows/deploy.yml`) chạy khi CI trên `main` xanh, trên
@@ -146,7 +146,7 @@ powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\purge-test
 
 Tắt đăng ký công khai: khôi phục `app.py`/`index.html`/`login.html` từ backup trước bản
 register, xoá `register.html`, restart. Dữ liệu demo (nếu thật sự cần) phục hồi từ
-`/home/azureuser/neon-demo-purge-2026-11-10-062210.sql` (xem [evidence/auth.md](evidence/auth.md)).
+`/home/azureuser/neon-demo-purge-2026-11-10-062210.sql`.
 
 ### 3.5. Rollback schema tasks (GĐ C)
 
@@ -189,9 +189,9 @@ powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\schema-mig
 
 | Việc | Cách làm |
 |---|---|
-| Dump local (lab) | `infra/setup/local/05-backup-restore.sh` → `/home/azureuser/studydb-lab.dump` |
-| Restore sang Neon | `infra/setup/neon/01-restore.sh` (pg_restore `--no-owner --no-privileges`) |
-| Kiểm tra Neon | `infra/setup/neon/02-verify.sh` (TLS, quyền, CRUD) |
+| Dump local (lab) | `docker exec cdb-study pg_dump -Fc -U postgres -d studydb > /home/azureuser/studydb-lab.dump` |
+| Restore sang Neon | `infra/setup/neon.sh` (TLS verify-full, `pg_restore --no-owner --no-privileges`, tạo `app_user`) |
+| Setup local DB | `infra/setup/local-db.sh` (container `cdb-study`, schema, `app_user`) |
 | Backup trước purge | `/home/azureuser/neon-demo-purge-<stamp>.sql` (data-only, column-inserts) |
 | Purge demo | `infra/ops/maintenance/purge-neon-demo.sh` — backup rồi xoá task → user trên Neon |
 | Dọn tài khoản test | `infra/ops/maintenance/purge-test-accounts.sh` — `test-*`, `shot+*`, `verify+*` |
@@ -199,8 +199,8 @@ powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\schema-mig
 | Backup Neon định kỳ | **Chưa bật** — Neon Free không có PITR dài; dump thủ công khi cần |
 
 Purge **không** đụng schema: `users`/`tasks` (kể cả `password_hash`, `position`, timestamp)
-giữ nguyên, chỉ xoá row. Production hiện `users=1` (tài khoản thật) `tasks=16` (16 việc mẫu); local docker
-vẫn giữ seed 2 user / 5 task.
+giữ nguyên, chỉ xoá row. Production giữ tài khoản/task demo thật; local Docker vẫn giữ
+seed 2 user / 5 task.
 
 ## 6. TLS & domain
 
@@ -308,7 +308,7 @@ project) → `az group delete -n rg-demo --yes` → kiểm tra bảng trên.
 ## 8. Chi phí & giới hạn vận hành
 
 - VM + IP + disk ≈ **$44.30/tháng** nếu chạy 24/7; 8 giờ demo ≈ $0.49. Ngưỡng $10 bị vượt
-  sau ~7 ngày. Chi tiết: [evidence/cloud.md](evidence/cloud.md).
+  sau ~7 ngày.
 - Neon Free scale-to-zero sau 5 phút: request đầu sau idle ~1.9–3.1 s; pool có
   `check_connection` + retry nên không trả 500/503.
 - Chưa có backup định kỳ/PITR/failover; dump nằm cùng VM.

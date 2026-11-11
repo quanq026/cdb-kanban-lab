@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 \
-            -f infra/setup/db/schema.sql
+            -f infra/setup/schema.sql
           psql -h 127.0.0.1 -U postgres -d studydb -v ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE app_user LOGIN PASSWORD 'ci-app-password';
           GRANT CONNECT ON DATABASE studydb TO app_user;

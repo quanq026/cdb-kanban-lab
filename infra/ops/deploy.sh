@@ -49,7 +49,7 @@ mkdir -p "$BACKUP"
 for f in $MANAGED; do
   if [ -f "$APP/$f" ]; then cp -a "$APP/$f" "$BACKUP/$f"; fi
 done
-cp -a "$NGINX_SITE" "$BACKUP/cdb-kanban.conf"
+if [ -f "$NGINX_SITE" ]; then cp -a "$NGINX_SITE" "$BACKUP/cdb-kanban.conf"; fi
 if [ -f "$CF_REALIP" ]; then cp -a "$CF_REALIP" "$BACKUP/cloudflare-realip.conf"; fi
 echo "backup=$BACKUP"
 
@@ -62,7 +62,11 @@ rollback() {
       rm -f "$APP/$f"
     fi
   done
-  install -m 644 "$BACKUP/cdb-kanban.conf" "$NGINX_SITE"
+  if [ -f "$BACKUP/cdb-kanban.conf" ]; then
+    install -m 644 "$BACKUP/cdb-kanban.conf" "$NGINX_SITE"
+  else
+    rm -f "$NGINX_SITE"
+  fi
   if [ -f "$BACKUP/cloudflare-realip.conf" ]; then
     install -m 644 "$BACKUP/cloudflare-realip.conf" "$CF_REALIP"
   else

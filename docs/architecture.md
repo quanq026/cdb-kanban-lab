@@ -36,7 +36,7 @@ Cùng VM (chỉ lab/backup, không phục vụ app):
 | NSG | 22 ← IP vận hành; 80, 443 ← `*`; không có 5432 |
 | Runtime | gunicorn 2 worker, Flask 3.1, psycopg 3.3, psycopg_pool 3.3 |
 | App dir | `/opt/cdb/app`; venv `/opt/cdb/venv/bin/python` |
-| Service | systemd `cdb-kanban` (`infra/setup/vm/cdb-kanban.service`) |
+| Service | systemd `cdb-kanban` (unit do `infra/setup/vm.sh` cài) |
 | nginx | site `cdb-kanban` + `conf.d/cloudflare-realip.conf` |
 | Neon | project `icy-sound-48483515`, branch `br-silent-darkness-a1gqqmlj`, DB `studydb`, role `app_user` |
 | Neon endpoint | `ep-ancient-bread-a13k7y58.ap-southeast-1.aws.neon.tech` (trực tiếp; pooled có tồn tại nhưng không dùng) |
@@ -72,7 +72,7 @@ erDiagram
   không đăng nhập được cho tới khi có hash.
 - `tasks.position`/`created_at`/`updated_at` thêm bằng migration GĐ C (additive + idempotent)
   và backfill `position` theo `id` hiện có; `updated_at` do trigger `trg_tasks_updated_at`.
-- DDL đầy đủ: `infra/setup/db/schema.sql`. Migration up/down:
+- DDL đầy đủ: `infra/setup/schema.sql`. Migration up/down:
   `infra/ops/maintenance/sql/2026-11-10-login*.sql` và
   `infra/ops/maintenance/sql/2026-11-10-task-order*.sql`.
 
@@ -80,7 +80,7 @@ erDiagram
 
 Đề gốc dùng `tasks.done boolean`, nhưng Kanban có 3 cột Todo/Doing/Done — boolean không
 biểu diễn được `doing`. Đổi sang `text` + `CHECK` để miền giá trị vẫn bị chặn ở DB. Đây
-là khác biệt có chủ ý, ghi ở [history.md](history.md) và [operations.md](operations.md).
+là khác biệt có chủ ý, xem thêm [operations.md](operations.md).
 
 ## 4. Luồng request
 

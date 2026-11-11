@@ -1,17 +1,15 @@
-# Cloud Database Lab — PostgreSQL 17 · Docker · Azure · Neon
+# CDB Kanban
 
-Bài lab end-to-end: dựng PostgreSQL 17 trong Docker trên VM Azure, làm backup/restore,
-đẩy dữ liệu lên Neon (managed Postgres), rồi chạy web Kanban Flask dùng chính database
-cloud đó — kèm đăng nhập, đăng ký, HTTPS và bộ test thật.
+Ứng dụng Kanban nhỏ (Flask + PostgreSQL 17) chạy trên một VM Azure, database là Neon
+(managed Postgres), phía trước là nginx + Let's Encrypt + Cloudflare.
 
 | | |
 |---|---|
 | Web | <https://kanban.akaine.io.vn/> |
 | Health | <https://kanban.akaine.io.vn/api/health> |
-| Repo | `quanq026/cdb-kanban-lab` (private) |
-| Trạng thái | Demo đang chạy; production `users=1`, `tasks=16` (16 việc mẫu) |
+| Stack | Flask 3.1 · psycopg 3.3 · PostgreSQL 17 · gunicorn · nginx · Docker |
 
-## Kiến trúc trong 10 giây
+## Kiến trúc
 
 ```
 Browser ──HTTPS──► Cloudflare (proxy, SSL strict)
@@ -23,81 +21,84 @@ Browser ──HTTPS──► Cloudflare (proxy, SSL strict)
                                     Neon PostgreSQL 17 "studydb" (verify-full)
 ```
 
-VM còn chạy container `postgres:17` tại `127.0.0.1:55432` làm nguồn dump cho lab và
-backup; app production chỉ nói chuyện với Neon. Chi tiết: [docs/architecture.md](docs/architecture.md).
+VM còn chạy container `postgres:17` tại `127.0.0.1:55432` làm nguồn dump cho lab.
+App production chỉ nói chuyện với Neon.
 
 ## Cấu trúc repo
 
 ```
-app/                        Runtime web app (deploy vào /opt/cdb/app)
-  app.py                    Flask API, pool, session, static + cache headers
-  index.html                Board Kanban
-  login.html                Trang đăng nhập
-  register.html             Trang đăng ký
-  app.css                   1 file CSS (design B, light/dark, responsive)
-  app.js                    1 file JS (board, auth, optimistic update, drag & drop + chỉ báo chèn)
+app/                     Ứng dụng (deploy vào /opt/cdb/app)
+  app.py                 Flask API, pool, session, static + cache headers
+  index.html             Board Kanban
+  login.html             Đăng nhập
+  register.html          Đăng ký
+  app.css                CSS (light/dark, responsive)
+  app.js                 Board, auth, optimistic update, drag & drop
 
 infra/
-  setup/                    Chạy MỘT LẦN khi dựng mới
-    db/schema.sql           users / tasks (position + timestamps) / index / trigger / seed
-    vm/                     01-provision → 02-deploy-app → 03-fix-tls + systemd unit
-    local/                  01-init → 02-roles → 03-verify → 04-persistence → 05-backup-restore
-    neon/                   01-restore → 02-verify
-    https/                  01-acme → 02-cert → 03-nginx → 04-renew-hook → 05-hardening
-  ops/                      Dùng THƯỜNG XUYÊN
-    deploy.sh               backup + install + health + rollback
-    nginx-cdb.conf          reverse proxy :80/:443
-    nginx-cloudflare-realip.conf  real IP Cloudflare
-    run-remote.ps1          Copy script LF lên VM rồi chạy bằng sudo
-    maintenance/            auth-*, schema-*, purge-*, idle-check, sql/
+  setup/                 Chạy MỘT LẦN khi dựng mới
+    schema.sql           DDL users/tasks + index + trigger
+    vm.sh                swap, Docker, nginx, psql 17, venv, systemd unit
+    local-db.sh          Postgres 17 trong Docker + app_user
+    neon.sh              restore dump sang Neon + app_user
+    https.sh             Let's Encrypt + nginx TLS + renewal hook
+  ops/                   Dùng THƯỜNG XUYÊN
+    deploy.sh            backup + install + health + rollback
+    nginx-cdb.conf       reverse proxy :80/:443
+    nginx-cloudflare-realip.conf
+    run-remote.ps1       copy script LF lên VM rồi chạy bằng sudo
+    maintenance/         auth-*, schema-*, purge-*, idle-check, sql/
+
+.github/
+  workflows/ci.yml       Postgres 17 + smoke test + syntax
+  workflows/deploy.yml   self-hosted runner trên VM
+  scripts/ci-smoke.py    57 case Flask test client
 
 docs/
-  architecture.md          Sơ đồ, thành phần, data model, luồng request
-  api.md                   Hợp đồng API: endpoint, lỗi, validate, session
-  operations.md            Deploy, rollback, migration, backup, TLS, cleanup
-  security.md              Least privilege, secret, TLS, auth, đánh đổi
-  testing.md               Bộ test, cách chạy, kết quả, kiểm thử UI
-  history.md               Nhật ký GĐ 1–6 + các phase sau, lỗi và cách sửa
-  evidence/                Bằng chứng thật: api, ui, cloud, auth, https + ảnh
-  design/options.{html,png} 2 phương án thiết kế GĐ B+ (mockup tĩnh)
-
-README.md
-.gitignore
-.github/workflows/          ci.yml (Postgres 17 + smoke) · deploy.yml (runner trên VM)
-.github/scripts/ci-smoke.py 57 case CI (Flask test client)
+  architecture.md        Sơ đồ, thành phần, data model, luồng request
+  api.md                 Hợp đồng API: endpoint, lỗi, validate, session
+  operations.md          Deploy, rollback, migration, backup, TLS, cleanup
+  security.md            Least privilege, secret, TLS, auth, đánh đổi
+  testing.md             CI smoke + kiểm thử UI/hạ tầng
 ```
 
-`infra/README.md` là bảng tra nhanh từng script.
+## Dựng mới
 
-## Chạy lại
-
-Yêu cầu: Azure CLI đã đăng nhập, SSH key `~/.ssh/id_rsa_azure`, PowerShell. Các lệnh chạy
-từ **root repo**.
+Yêu cầu: Azure CLI đã đăng nhập, SSH key `~/.ssh/id_rsa_azure`, PowerShell. Chạy từ
+**root repo**.
 
 ```powershell
-# 1. Hạ tầng mới (hiện tại đã tồn tại — bỏ qua nếu chỉ cập nhật app)
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\vm\01-provision.sh
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\local\01-init.sh
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\local\02-roles.sh
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\local\05-backup-restore.sh
-powershell -File infra\ops\run-remote.ps1 -Path infra\setup\neon\01-restore.sh
+# 1. Chuẩn bị secrets trên VM (không commit): /etc/cdb/secrets.env
+#    NEON_HOST, NEON_APP_PASSWORD, NEON_OWNER_USER, NEON_OWNER_PASSWORD,
+#    PG_SUPER_PASSWORD, LOCAL_APP_PASSWORD
 
-# 2. Deploy app: push main → CI → Actions tự deploy lên VM
-git push origin main
+# 2. Bootstrap VM: swap, Docker, nginx, psql 17, venv, systemd unit
+powershell -File infra\ops\run-remote.ps1 -Path infra\setup\vm.sh
 
-# 2b. Chạy lại deploy thủ công qua Actions (runner phải online)
-gh workflow run deploy.yml --ref main
-gh run watch
+# 3. (Tuỳ chọn) Postgres local trong Docker
+scp -i $env:USERPROFILE\.ssh\id_rsa_azure infra\setup\schema.sql `
+  azureuser@20.48.104.156:/opt/cdb/schema.sql
+powershell -File infra\ops\run-remote.ps1 -Path infra\setup\local-db.sh
 
-# 3. Dọn tài khoản test (nếu có) — test tự động đã chuyển vào CI
-powershell -File infra\ops\run-remote.ps1 -Path infra\ops\maintenance\purge-test-accounts.sh
+# 4. (Tuỳ chọn) Restore dump sang Neon
+powershell -File infra\ops\run-remote.ps1 -Path infra\setup\neon.sh
+
+# 5. HTTPS (DNS đã trỏ về VM, port 80/443 mở)
+powershell -File infra\ops\run-remote.ps1 -Path infra\setup\https.sh
+
+# 6. Deploy app lần đầu từ checkout trên VM
+sudo bash infra/ops/deploy.sh "$PWD"
 ```
 
-GitHub Actions: `CI` chạy `.github\scripts\ci-smoke.py` trên Postgres 17 (57 case) + syntax
-check; `Deploy` chạy sau khi CI trên `main` xanh, qua self-hosted runner trên VM
-(`runs-on: [self-hosted, cdb-vm]`) nên **không cần mở SSH cho GitHub**.
+Các lần sau chỉ cần push `main`: `CI` xanh → `Deploy` chạy tự động qua self-hosted
+runner `cdb-vm`.
 
-`infra/ops/deploy.sh` sao lưu bản cũ vào `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/`
+```powershell
+gh workflow run deploy.yml --ref main   # chạy lại thủ công
+gh run watch
+```
+
+`infra/ops/deploy.sh` backup bản cũ vào `/opt/cdb/app/backup-YYYY-MM-DD[-HHMMSS]/`
 trước khi ghi đè; nếu `nginx -t` fail, service không lên hoặc health-check fail (retry
 10 lần) thì tự khôi phục. Mỗi lần đổi `app.css`/`app.js` phải tăng `?v=` trong **cả ba**
 HTML vì Cloudflare cache asset tĩnh (~4 h).
@@ -106,13 +107,12 @@ HTML vì Cloudflare cache asset tĩnh (~4 h).
 
 | Thành phần | Giá trị |
 |---|---|
-| VM | `vm-cdb` · `20.48.104.156` · japaneast · `Standard_B2pls_v2` (Arm64, 2 vCPU / 4 GiB) · Ubuntu 24.04.5 |
+| VM | `20.48.104.156` · japaneast · `Standard_B2pls_v2` (Arm64, 2 vCPU / 4 GiB) · Ubuntu 24.04 |
 | App | `/opt/cdb/app`, venv `/opt/cdb/venv`, systemd `cdb-kanban`, nginx site `cdb-kanban` |
-| Neon | project `icy-sound-48483515`, DB `studydb`, role `app_user`, endpoint trực tiếp (không `-pooler`) |
-| TLS origin | Let's Encrypt `CN=kanban.akaine.io.vn`, hết hạn 2027-02-07, tự gia hạn `certbot.timer` |
-| Secret | `/etc/cdb/app.env` (app) + `/etc/cdb/secrets.env` (lab/owner), 600 root — **không** trong repo |
-| DB local | container `cdb-study`, volume `cdb-study-data`, `127.0.0.1:55432`, DB `studydb` |
-| Chi phí | ≈ $44.30/tháng nếu VM chạy 24/7; deallocate sau demo (`docs/operations.md` §7) |
+| Neon | DB `studydb`, role `app_user`, endpoint trực tiếp (không `-pooler`) |
+| TLS origin | Let's Encrypt `CN=kanban.akaine.io.vn`, tự gia hạn `certbot.timer` |
+| Secret | `/etc/cdb/app.env` (app) + `/etc/cdb/secrets.env` (owner) — **không** trong repo |
+| DB local | container `cdb-study`, volume `cdb-study-data`, `127.0.0.1:55432` |
 
 ## Tài liệu
 
@@ -122,18 +122,13 @@ HTML vì Cloudflare cache asset tĩnh (~4 h).
 | Gọi API nào, lỗi nào | [docs/api.md](docs/api.md) |
 | Deploy / rollback / migration / dọn tài nguyên | [docs/operations.md](docs/operations.md) |
 | Mô hình bảo mật và đánh đổi | [docs/security.md](docs/security.md) |
-| Test gì, chạy sao, kết quả | [docs/testing.md](docs/testing.md) |
-| Đã làm gì, lỗi gì, sửa thế nào | [docs/history.md](docs/history.md) |
-| Bằng chứng raw (lệnh + output) | [docs/evidence/README.md](docs/evidence/README.md) |
+| Test gì, chạy sao | [docs/testing.md](docs/testing.md) |
 
 ## Phạm vi & giới hạn
 
-- Demo, không dùng cho dữ liệu thật: **không rate limit** (đã bỏ theo yêu cầu), không
-  CAPTCHA/2FA/xác thực email, không có luồng quên/đổi mật khẩu.
+- Demo, không dùng cho dữ liệu thật: **không rate limit**, không CAPTCHA/2FA/xác thực
+  email, không có luồng quên/đổi mật khẩu.
 - Session là cookie ký phía client; logout chỉ xoá cookie hiện tại. Muốn thu hồi toàn bộ
   phải đổi `APP_SECRET_KEY` rồi restart.
 - Chưa test mất toàn máy/PITR/failover; dump nằm cùng VM.
-- Schema GĐ C đã đủ: `tasks.position`, `created_at`, `updated_at` + trigger
-  `trg_tasks_updated_at`; migration/rollback ở `infra/ops/maintenance/sql/`.
-
-Danh sách đầy đủ ở [docs/security.md](docs/security.md) §9 và [docs/operations.md](docs/operations.md) §8.
+- Migration thủ công; deploy không tự chạy DDL.
