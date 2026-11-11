@@ -198,8 +198,8 @@ sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.y
 
 ```bash
 curl -fsS http://127.0.0.1:8000/api/health
-curl -fsS -k --resolve kanban.akaine.io.vn:443:127.0.0.1 https://kanban.akaine.io.vn/api/health
-curl -sS -o /dev/null -w '%{http_code}\n' https://kanban.akaine.io.vn/login
+curl -fsS -k --resolve "<domain>:443:127.0.0.1" "https://<domain>/api/health"
+curl -sS -o /dev/null -w '%{http_code}\n' "https://<domain>/login"
 sudo docker compose --env-file /opt/cdb/compose.env -f /opt/cdb/docker-compose.yml ps
 ss -ltnp | grep 8000
 ```
@@ -235,7 +235,7 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl enable --now cdb-kanban
 sudo systemctl status cdb-kanban --no-pager
 curl -fsS http://127.0.0.1:8000/api/health
-curl -fsS -k --resolve kanban.akaine.io.vn:443:127.0.0.1 https://kanban.akaine.io.vn/api/health
+curl -fsS -k --resolve "<domain>:443:127.0.0.1" "https://<domain>/api/health"
 ```
 
 Nếu `/opt/cdb/nginx-backup/` chưa có (deploy fail trước khi backup), nginx vẫn là bản cũ —

@@ -1,6 +1,6 @@
 # API
 
-Base URL: `https://kanban.akaine.io.vn`. Mọi response API là JSON; lỗi luôn có dạng
+Base URL: `https://<domain>`. Mọi response API là JSON; lỗi luôn có dạng
 `{"error": "...", "code": "..."}` (không trả HTML).
 
 ## 1. Xác thực
@@ -55,11 +55,11 @@ Mỗi task trả đủ field:
 Ví dụ:
 
 ```bash
-curl -sS -c jar -X POST https://kanban.akaine.io.vn/api/register \
+curl -sS -c jar -X POST https://<domain>/api/register \
   -H 'Content-Type: application/json' \
   -d '{"email":"you@example.test","password":"mot-mat-khau-du-dai"}'
 
-curl -sS -b jar -X POST https://kanban.akaine.io.vn/api/tasks \
+curl -sS -b jar -X POST https://<domain>/api/tasks \
   -H 'Content-Type: application/json' \
   -d '{"user_id":42,"title":"Việc mới"}'
 ```
