@@ -41,7 +41,7 @@ export DB_HOST=127.0.0.1
 export DB_PORT=5432
 export DB_NAME=studydb
 export DB_USER=app_user
-export DB_PASSWORD=kanban_internal_secret_2026
+export DB_PASSWORD=<mat-khau-db>
 export DB_SSLMODE=disable
 export APP_SECRET_KEY=local-test-secret-key-32-chars-long
 

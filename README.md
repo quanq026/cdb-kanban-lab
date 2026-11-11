@@ -21,6 +21,11 @@
 3. Khởi chạy: `docker compose up -d --build`
 4. Mở trình duyệt truy cập `https://<your-domain.com>` (Caddy tự cấp phát SSL Let's Encrypt, Postgres tự khởi tạo bảng và dữ liệu mẫu).
 
+> [!TIP]
+> **Đổi mật khẩu DB (tùy chọn):** Mật khẩu DB nội bộ đã được cấu hình mặc định sẵn. Nếu muốn đổi, hãy bỏ comment `DB_PASSWORD=<mật khẩu>` trong `.env` **trước** lần `docker compose up` đầu tiên (vì Postgres chỉ nhận mật khẩu khi khởi tạo volume lần đầu). Nếu đã khởi chạy trước đó, bạn có 2 cách:
+> 1. Chạy `docker compose down -v` (xoá dữ liệu) rồi up lại; hoặc
+> 2. Đổi mật khẩu trực tiếp: `docker exec -it cdb-db psql -U app_user -d studydb -c "ALTER USER app_user PASSWORD '<mật khẩu mới>'"` rồi cập nhật `DB_PASSWORD` trong `.env` và chạy `docker compose up -d`.
+
 ### Cập nhật khi có bản mới:
 ```bash
 git pull && docker compose up -d --build
