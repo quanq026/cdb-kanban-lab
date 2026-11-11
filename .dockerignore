@@ -9,4 +9,3 @@ __pycache__
 .venv
 node_modules
 *.md
-login-azure.ps1
