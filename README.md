@@ -62,6 +62,31 @@ docs/
   testing.md             CI smoke + kiểm thử UI/hạ tầng
 ```
 
+## Chạy local
+
+Yêu cầu: Python 3.12+, Docker (hoặc một Postgres 17 sẵn có).
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+pip install -r app/requirements.txt
+
+# Postgres 17 local
+docker run -d --name cdb-local -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=studydb postgres:17
+PGPASSWORD=dev psql "host=127.0.0.1 port=5432 dbname=studydb user=postgres" \
+  -f infra/setup/schema.sql
+
+# Biến môi trường: copy rồi sửa cho local (DB_USER=postgres, DB_SSLMODE=disable)
+cp .env.example .env
+set -a; . ./.env; set +a
+
+gunicorn --chdir app --bind 127.0.0.1:8000 app:app
+```
+
+Mở <http://127.0.0.1:8000/>. App đọc biến trực tiếp từ process env, không tự nạp `.env`.
+
 ## Dựng mới
 
 Yêu cầu: Azure CLI đã đăng nhập, SSH key `~/.ssh/id_rsa_azure`, PowerShell. Chạy từ

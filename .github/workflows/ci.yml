@@ -55,13 +55,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet \
-            "Flask==3.1.3" \
-            "Werkzeug==3.1.9" \
-            "gunicorn==26.2.0" \
-            "psycopg==3.3.8" \
-            "psycopg-binary==3.3.8" \
-            "psycopg-pool==3.3.3"
+          python -m pip install --quiet -r app/requirements.txt
 
       - name: Apply schema and create app_user
         env:
