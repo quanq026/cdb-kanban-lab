@@ -111,13 +111,14 @@ push main ──► GitHub Actions
                                         ▼
                      Deploy (sau CI xanh, workflow_run)
                        └─ self-hosted runner cdb-vm (trên VM, outbound HTTPS)
-                            └─ docker login ghcr.io → sudo env IMAGE_TAG=<sha> \
-                                 bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
-                                 ├─ docker pull <sha>
+                            ├─ docker login ghcr.io bằng GITHUB_TOKEN
+                            ├─ docker pull <repo>:<sha> (user runner, group docker)
+                            └─ sudo env IMAGE_TAG=<sha> bash infra/ops/deploy.sh
+                                 ├─ pull chỉ khi thiếu image
                                  ├─ ghi /opt/cdb/current_tag + previous_tag
                                  ├─ docker compose up -d
-                                 ├─ nginx -t && reload
-                                 ├─ health 10×2 s; lỗi → compose về previous_tag
+                                 ├─ backup nginx conf → cài mới → nginx -t → reload
+                                 ├─ health 10×2 s; lỗi → nginx + compose về bản cũ
                                  └─ prune image, giữ 3 tag gần nhất
 ```
 

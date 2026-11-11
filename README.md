@@ -118,17 +118,21 @@ push main ──► CI (ubuntu-latest): test Postgres 17 + lint
                   └─ Image (ubuntu-24.04-arm): hadolint + build arm64 + trivy
                        └─ push main: ghcr.io/<owner>/cdb-kanban:<sha> (+ latest)
                   └─ xanh ──► Deploy (self-hosted runner trên VM)
-                                 └─ docker pull <sha> → compose up → health
+                                 └─ runner pull <sha> → sudo deploy.sh → compose up
+                                    → health → (lỗi: rollback tag + nginx)
 ```
 
 - `CI` chạy khi push/PR `main`: test + lint, cùng một job `Image (linux/arm64)` build
   `python:3.12-slim`, chạy `hadolint`, `trivy` (fail HIGH/CRITICAL có bản vá), chỉ push
   GHCR khi push `main`. PR chỉ build, không push.
 - `Deploy` chạy sau khi **toàn bộ** CI trên `main` xanh, qua runner `[self-hosted, cdb-vm]`
-  (chỉ cần outbound HTTPS, không mở SSH cho GitHub).
-- `deploy.sh` pull tag SHA, ghi `/opt/cdb/current_tag` + `previous_tag`, `docker compose up -d`,
-  cài nginx conf, `nginx -t`, reload, health-check 10×2 s; lỗi → quay lại `previous_tag`
-  rồi exit 1. Image cũ được prune, giữ 3 tag gần nhất.
+  (chỉ cần outbound HTTPS, không mở SSH cho GitHub). Runner đăng nhập GHCR bằng
+  `GITHUB_TOKEN` và pull image bằng chính user runner (group `docker`); `deploy.sh` chạy
+  bằng `sudo` chỉ pull lại khi image thiếu, nên root không cần credential GHCR.
+- `deploy.sh` ghi `/opt/cdb/current_tag` + `previous_tag`, `docker compose up -d`, sao lưu
+  nginx conf vào `/opt/cdb/nginx-backup/`, cài conf mới, `nginx -t`, reload, health-check
+  10×2 s; lỗi → khôi phục nginx + quay lại `previous_tag` rồi exit 1. Image cũ được prune,
+  giữ 3 tag gần nhất.
 - `Backup` chạy hằng ngày 02:17 VN trên `ubuntu-latest`: dump Neon, đẩy dump + manifest
   counts lên R2, prune còn 14 bản; thứ Hai 10:17 VN restore bản mới nhất vào DB tạm để
   kiểm tra; 03:47 VN hằng ngày kiểm bản mới nhất không cũ quá 36 h

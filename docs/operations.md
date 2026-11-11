@@ -7,7 +7,7 @@
 | VM | `<VM_IP>` (SSH key-only, port 22 chỉ mở từ IP vận hành) |
 | User deploy | `<deploy-user>` (thuộc group `docker`, chạy được `docker compose`) |
 | App | container `cdb-app` từ image `ghcr.io/<owner>/cdb-kanban:<sha>` |
-| Compose | `/opt/cdb/docker-compose.yml`, env `/opt/cdb/compose.env` (600), tag `/opt/cdb/current_tag` + `/opt/cdb/previous_tag` |
+| Compose | `/opt/cdb/docker-compose.yml`, env `/opt/cdb/compose.env` (600), tag `/opt/cdb/current_tag` + `/opt/cdb/previous_tag`, nginx backup `/opt/cdb/nginx-backup/` (700) |
 | Secret | `/etc/cdb/app.env` (container `env_file`) + `/etc/cdb/secrets.env` (owner) — 600 root |
 
 `/etc/cdb/app.env` chứa `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`,
@@ -20,25 +20,38 @@ mount nó qua `env_file`, không bake vào image.
 push main ──► CI xanh (test + lint + build/scan image) ──► push GHCR <sha>
                     └─ xanh ──► Deploy (workflow_run)
                                    └─ runner tự host trên VM
+                                        ├─ docker login ghcr.io (GITHUB_TOKEN)
+                                        ├─ docker pull <repo>:<sha>   (user runner, group docker)
                                         └─ sudo env IMAGE_TAG=<sha> IMAGE_REPO=<repo> \
                                              bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
 ```
 
+Xác thực GHCR: image được **user runner** (thuộc group `docker`, do `vm.sh` thêm) pull bằng
+credential `GITHUB_TOKEN`. `deploy.sh` chạy dưới `sudo` nhưng dùng chung Docker daemon nên
+chỉ pull lại khi image thiếu (`docker image inspect`), không cần credential của runner
+trong môi trường root.
+
 `deploy.sh` (đọc `IMAGE_TAG` + `IMAGE_REPO`, `DOMAIN` tuỳ chọn):
 
 1. Từ chối chạy nếu `cdb-kanban.service` còn active (cutover chưa xong) hoặc thiếu compose.
-2. `docker pull "$IMAGE_REPO:$IMAGE_TAG"`.
+2. Đảm bảo image có mặt: `docker image inspect` → chỉ `docker pull` khi thiếu.
 3. Ghi `previous_tag` (tag đang chạy) rồi `current_tag`, và `/opt/cdb/compose.env`
    (`CDB_IMAGE`, `IMAGE_TAG`).
 4. `docker compose up -d --remove-orphans` với `infra/ops/docker-compose.yml`.
 5. Health-check 4 mức, retry 10×2 s: app `:8000`, nginx `:443 --resolve`, `/login`,
-   `/register`. Fail → `trap ERR` đưa compose về `previous_tag` rồi exit 1.
-6. Cài nginx conf + real IP, `nginx -t` trước khi reload.
+   `/register`.
+6. Sao lưu `cdb-kanban.conf` + `cloudflare-realip.conf` vào `/opt/cdb/nginx-backup/`,
+   cài conf mới, `nginx -t`, reload, rồi health-check TLS thêm một lần.
 7. Prune image cũ, giữ 3 tag gần nhất (luôn giữ `current_tag` + `previous_tag`).
+
+Bất kỳ bước nào fail → `trap ERR`: khôi phục 2 file nginx từ `/opt/cdb/nginx-backup/`
+(xoá nếu trước đó chưa có) + `nginx -t` + reload + health TLS, đưa compose về `previous_tag`
+(nếu có) rồi exit 1.
 
 Chạy tay khi cần (tag phải đã có trên GHCR, thường là SHA của commit đã qua CI):
 
 ```bash
+docker pull ghcr.io/<owner>/cdb-kanban:<sha>          # user runner, có quyền docker
 sudo env IMAGE_REPO=ghcr.io/<owner>/cdb-kanban IMAGE_TAG=<sha> \
   bash infra/ops/deploy.sh "$PWD"
 ```
@@ -64,13 +77,22 @@ sudo docker exec cdb-app python -c \
 
 ### 3.1. Tự động
 
-`deploy.sh` tự rollback khi health-check fail: đọc `/opt/cdb/previous_tag`, ghi lại
-`compose.env`, `docker compose up -d` và kiểm tra health, rồi exit 1 (workflow đỏ).
+`deploy.sh` tự rollback khi bất kỳ bước nào fail:
+
+- Nếu đã đụng nginx: khôi phục `cdb-kanban.conf` + `cloudflare-realip.conf` từ
+  `/opt/cdb/nginx-backup/` (file nào trước đó chưa có thì xoá), `nginx -t`, reload,
+  health-check TLS.
+- Đọc `/opt/cdb/previous_tag`, ghi lại `compose.env`, `docker compose up -d`, kiểm tra
+  health, rồi exit 1 (workflow đỏ).
+- Nếu **chưa có `previous_tag`** (lần deploy container đầu tiên) thì không thể rollback
+  bằng tag: script báo rõ và exit 1. Quay lại systemd theo
+  [runbook-manual.md](runbook-manual.md) §3.
 
 ### 3.2. Thủ công về tag trước
 
 ```bash
 sudo cat /opt/cdb/previous_tag
+docker pull ghcr.io/<owner>/cdb-kanban:$(sudo cat /opt/cdb/previous_tag)
 sudo env IMAGE_REPO=ghcr.io/<owner>/cdb-kanban IMAGE_TAG="$(sudo cat /opt/cdb/previous_tag)" \
   bash infra/ops/deploy.sh "$PWD"
 ```
@@ -85,6 +107,19 @@ sudo docker compose --env-file compose.env -f docker-compose.yml up -d
 
 Lưu ý: chạy `deploy.sh` cho tag cũ sẽ ghi đè `previous_tag` bằng tag đang chạy — nếu cần
 giữ cả hai, chép `/opt/cdb/current_tag` trước khi rollback.
+
+### 3.2.1. Khôi phục nginx thủ công
+
+`/opt/cdb/nginx-backup/` giữ bản conf của lần deploy gần nhất (mode 700 root):
+
+```bash
+sudo ls -l /opt/cdb/nginx-backup
+sudo install -m 644 /opt/cdb/nginx-backup/cdb-kanban.conf \
+  /etc/nginx/sites-available/cdb-kanban
+sudo install -m 644 /opt/cdb/nginx-backup/cloudflare-realip.conf \
+  /etc/nginx/conf.d/cloudflare-realip.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ### 3.3. Xem và dọn image
 
