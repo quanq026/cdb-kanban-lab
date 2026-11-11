@@ -42,12 +42,15 @@ infra/
     https.sh             Let's Encrypt + nginx TLS + renewal hook
   ops/
     deploy.sh            backup + install + health + rollback
+    backup.sh            pg_dump Neon -> R2 + prune (chạy trên GitHub Actions)
+    restore-test.sh      restore bản mới nhất vào DB tạm + kiểm tra
     nginx-cdb.conf       reverse proxy :80/:443
     nginx-cloudflare-realip.conf
   migrations/            SQL migration up/down (đã áp dụng)
 
 .github/
   workflows/ci.yml       Postgres 17 + smoke test + syntax/lint
+  workflows/backup.yml   backup Neon ra R2 hằng ngày + restore test hằng tuần
   workflows/deploy.yml   self-hosted runner trên VM
   scripts/ci-smoke.py    59 case Flask test client
 
@@ -115,6 +118,10 @@ push main ──► CI (ubuntu-latest): Postgres 17 + schema + ci-smoke.py + lin
   outbound HTTPS, không mở SSH cho GitHub).
 - `deploy.sh` backup `/opt/cdb/app` + nginx conf vào `/opt/cdb/app/backup-<stamp>/`, cài
   file, `nginx -t`, reload, restart, health-check retry 10×2 s; lỗi → tự rollback.
+- `Backup` chạy hằng ngày 02:17 VN trên `ubuntu-latest`: dump Neon, đẩy dump + manifest
+  counts lên R2, prune còn 14 bản; thứ Hai 10:17 VN restore bản mới nhất vào DB tạm để
+  kiểm tra; 03:47 VN hằng ngày kiểm bản mới nhất không cũ quá 36 h
+  (xem [docs/operations.md §5](docs/operations.md)).
 - `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css` và `/app.js` một lần lúc khởi động;
   deploy restart nên asset mới có URL mới (Cloudflare cache ~4 h).
 
@@ -156,5 +163,6 @@ owner/group của `/opt/cdb/app` và domain trong script.
   email, không có luồng quên/đổi mật khẩu.
 - Session là cookie ký phía client; logout chỉ xoá cookie hiện tại. Muốn thu hồi toàn bộ
   phải đổi `APP_SECRET_KEY` rồi restart.
-- Chưa test mất toàn máy/PITR/failover; chưa có backup tự động.
+- Chưa diễn tập mất toàn máy/failover; backup là logical dump hằng ngày (RPO ≤ 24 h), không
+  có PITR. Xem [docs/operations.md §5](docs/operations.md).
 - Migration thủ công; deploy không tự chạy DDL.
