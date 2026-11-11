@@ -4,7 +4,7 @@
 # Assumes DNS for the domain already points at this VM and ports 80/443 are open.
 # Idempotent: re-running renews/reuses the certificate and rewrites the config.
 #
-# Usage (on the VM): sudo bash infra/setup/https.sh
+# Usage (on the VM): sudo bash deploy/azure/https.sh
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 

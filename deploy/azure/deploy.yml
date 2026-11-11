@@ -44,7 +44,7 @@ jobs:
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       # Pull with the runner user (member of the docker group, set up by
-      # infra/setup/vm.sh). sudo then reuses the image from the same daemon, so
+      # deploy/azure/vm.sh). sudo then reuses the image from the same daemon, so
       # root never needs the runner's GHCR credentials.
       - name: Pull image as the runner user
         run: docker pull "$IMAGE_REPO:$IMAGE_TAG"
@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo env IMAGE_REPO="$IMAGE_REPO" IMAGE_TAG="$IMAGE_TAG" DOMAIN="$DOMAIN" \
-            bash infra/ops/deploy.sh "$GITHUB_WORKSPACE"
+            bash deploy/azure/deploy.sh "$GITHUB_WORKSPACE"
 
       - name: Verify production
         run: |

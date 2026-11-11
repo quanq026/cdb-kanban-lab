@@ -46,8 +46,8 @@ SITE_EXISTED=0
 CF_EXISTED=0
 
 for f in docker-compose.yml nginx-cdb.conf nginx-cloudflare-realip.conf; do
-  if [ ! -f "$SRC/infra/ops/$f" ]; then
-    echo "missing $SRC/infra/ops/$f" >&2
+  if [ ! -f "$SRC/deploy/azure/$f" ]; then
+    echo "missing $SRC/deploy/azure/$f" >&2
     exit 2
   fi
 done
@@ -57,12 +57,12 @@ if systemctl is-active --quiet cdb-kanban; then
   exit 2
 fi
 if ! docker compose version >/dev/null 2>&1; then
-  echo "docker compose plugin is missing; run infra/setup/vm.sh" >&2
+  echo "docker compose plugin is missing; run deploy/azure/vm.sh" >&2
   exit 2
 fi
 
 install -d -m 755 "$ETC"
-install -m 644 "$SRC/infra/ops/docker-compose.yml" "$COMPOSE_FILE"
+install -m 644 "$SRC/deploy/azure/docker-compose.yml" "$COMPOSE_FILE"
 
 compose_env() {
   umask 077
@@ -190,8 +190,8 @@ wait_http register "http://127.0.0.1:8000/register"
 
 backup_nginx
 NGINX_TOUCHED=1
-install -m 644 "$SRC/infra/ops/nginx-cdb.conf" "$NGINX_SITE"
-install -m 644 "$SRC/infra/ops/nginx-cloudflare-realip.conf" "$CF_REALIP"
+install -m 644 "$SRC/deploy/azure/nginx-cdb.conf" "$NGINX_SITE"
+install -m 644 "$SRC/deploy/azure/nginx-cloudflare-realip.conf" "$CF_REALIP"
 nginx -t
 systemctl reload nginx
 wait_http tls -k --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health"

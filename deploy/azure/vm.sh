@@ -4,10 +4,10 @@
 # Installs swap, nginx, PostgreSQL client 17 and Docker + compose plugin, writes
 # /etc/cdb/app.env from /etc/cdb/secrets.env, and puts the deploy user in the
 # docker group. Images, the compose file and the nginx site are pushed by
-# infra/ops/deploy.sh from a repo checkout. The legacy venv/systemd unit is no
+# deploy/azure/deploy.sh from a repo checkout. The legacy venv/systemd unit is no
 # longer created; a running one is removed only by the cutover checklist.
 #
-# Usage (on the VM): sudo bash infra/setup/vm.sh
+# Usage (on the VM): sudo bash deploy/azure/vm.sh
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
