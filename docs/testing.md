@@ -10,7 +10,7 @@ Bộ kiểm thử tự động được cấu hình trong file `.github/workflow
 
 | Hạng mục | Công cụ / Môi trường | Chi tiết kiểm tra |
 |---|---|---|
-| **Database Service** | `postgres:17` (Docker container) | Khởi tạo service DB, nạp `infra/setup/schema.sql` và `infra/setup/seed.sql` |
+| **Database Service** | `postgres:17` (Docker container) | Khởi tạo service DB, nạp `infra/setup/schema.sql` |
 | **Kiểm tra cú pháp** | `python -m py_compile`, `node --check` | Đảm bảo không có lỗi cú pháp trong `app/app.py`, `app/app.js` và `ci-smoke.py` |
 | **Linting code** | `ruff check app .github/scripts` | Kiểm tra chuẩn code Python, phát hiện biến thừa, import không dùng, v.v. |
 | **Linting Workflow** | `actionlint` | Kiểm tra tính đúng đắn của các file GitHub Actions workflow |
@@ -27,7 +27,7 @@ Bạn có thể chạy toàn bộ 59 ca kiểm thử khói (smoke test) ngay tr�
 ```bash
 docker compose up db -d
 ```
-Container `cdb-db` sẽ khởi động và nạp sẵn schema cùng dữ liệu mẫu trên cổng `127.0.0.1:5432`.
+Container `cdb-db` sẽ khởi động và nạp sẵn schema bảng dữ liệu.
 
 ### Bước 2: Thiết lập môi trường và chạy test
 ```bash

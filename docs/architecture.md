@@ -17,7 +17,7 @@ Docker: cdb-app (python:3.12-slim, non-root UID 10001)
    ▼
 Docker: cdb-db (postgres:17-alpine)
    │ PostgreSQL 17, database "studydb", user "app_user"
-   │ Khởi tạo tự động từ /docker-entrypoint-initdb.d/ (schema.sql, seed.sql)
+   │ Khởi tạo tự động từ /docker-entrypoint-initdb.d/ (schema.sql)
    │ Dữ liệu lưu bền vững qua Docker volume: db_data
    └─ Lắng nghe cổng 5432 trong mạng Docker nội bộ (không mở ra host hay Internet)
 ```
@@ -63,7 +63,7 @@ erDiagram
 - FK `tasks.user_id → users.id`; xoá user phải xoá task trước.
 - `users.password_hash` nullable để tương thích dữ liệu mẫu và bảo vệ đăng nhập.
 - `tasks.updated_at` do trigger `trg_tasks_updated_at` tự động cập nhật khi có `UPDATE`.
-- DDL đầy đủ: `infra/setup/schema.sql`. Dữ liệu mẫu demo: `infra/setup/seed.sql`.
+- DDL đầy đủ: `infra/setup/schema.sql`.
 
 ### Vì sao `status` thay vì `done boolean`
 
@@ -91,7 +91,7 @@ cp .env.example .env && nano .env (điền DOMAIN, APP_SECRET_KEY)
        ▼
 docker compose up -d --build
        │
-       ├─ Khởi động db: mount schema.sql & seed.sql khởi tạo dữ liệu
+       ├─ Khởi động db: mount schema.sql khởi tạo cấu trúc bảng
        ├─ Build app: đóng gói Flask & Gunicorn non-root
        └─ Khởi động caddy: tự kết nối ACME Let's Encrypt cấp SSL cho DOMAIN
 ```
@@ -100,7 +100,7 @@ docker compose up -d --build
 
 | Quyết định | Lý do |
 |---|---|
-| PostgreSQL 17 container nội bộ | Độc lập hoàn toàn, không phụ thuộc cloud ngoài, tự động nạp schema/seed lần đầu |
+| PostgreSQL 17 container nội bộ | Độc lập hoàn toàn, không phụ thuộc cloud ngoài, tự động nạp schema lần đầu |
 | Caddy Reverse Proxy | Tự động hóa 100% việc cấp phát và gia hạn SSL Let's Encrypt, cấu hình cực ngắn |
 | Tối giản `.env` | Mọi thông số DB nội bộ đều có giá trị mặc định an toàn; người dùng chỉ cần điền DOMAIN và SECRET_KEY |
 | Cô lập DB trong mạng Compose | Port 5432 chỉ mở trong mạng bridge nội bộ cho app, không expose ra host hay Internet |

@@ -61,15 +61,13 @@ jobs:
         run: |
           python -m pip install --quiet ruff==0.17.4
 
-      - name: Apply schema and seed
+      - name: Apply schema
         env:
           PGPASSWORD: ci-app-password
         run: |
           set -euo pipefail
           psql -h 127.0.0.1 -U app_user -d studydb -v ON_ERROR_STOP=1 \
             -f infra/setup/schema.sql
-          psql -h 127.0.0.1 -U app_user -d studydb -v ON_ERROR_STOP=1 \
-            -f infra/setup/seed.sql
 
       - name: Syntax checks
         run: |

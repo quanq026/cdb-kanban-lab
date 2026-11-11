@@ -19,7 +19,7 @@
    - Sinh mã bí mật bằng `openssl rand -hex 32` rồi điền vào `APP_SECRET_KEY`
    *(Database PostgreSQL 17 nội bộ đã được cấu hình tự động sẵn trong Docker, không cần cài đặt hay chạy lệnh SQL gì thêm).*
 3. Khởi chạy: `docker compose up -d --build`
-4. Mở trình duyệt truy cập `https://<your-domain.com>` (Caddy tự cấp phát SSL Let's Encrypt, Postgres tự khởi tạo bảng và dữ liệu mẫu).
+4. Mở trình duyệt truy cập `https://<your-domain.com>` (Caddy tự cấp phát SSL Let's Encrypt, Postgres tự khởi tạo bảng).
 
 > [!TIP]
 > **Đổi mật khẩu DB (tùy chọn):** Mật khẩu DB nội bộ đã được cấu hình mặc định sẵn. Nếu muốn đổi, hãy bỏ comment `DB_PASSWORD=<mật khẩu>` trong `.env` **trước** lần `docker compose up` đầu tiên (vì Postgres chỉ nhận mật khẩu khi khởi tạo volume lần đầu). Nếu đã khởi chạy trước đó, bạn có 2 cách:
@@ -61,7 +61,6 @@ app/                     Mã nguồn ứng dụng
 infra/
   setup/
     schema.sql           DDL users/tasks + index + trigger
-    seed.sql             Dữ liệu mẫu demo
 
 .github/
   workflows/ci.yml       Test Postgres 17 + lint + build/scan/push image arm64
@@ -94,7 +93,7 @@ Yêu cầu: Python 3.12+ và database Postgres 17 (hoặc chạy `docker compose
 
 ## CI/CD
 
-- **CI (`.github/workflows/ci.yml`):** Tự động kích hoạt khi push/PR `main`: khởi động container service Postgres 17, nạp `schema.sql` và `seed.sql`, kiểm tra syntax (`py_compile`, `node --check`), chạy lint (`ruff`, `actionlint`), chạy 59 test cases smoke test. Sau đó build image arm64 và scan bảo mật bằng Trivy.
+- **CI (`.github/workflows/ci.yml`):** Tự động kích hoạt khi push/PR `main`: khởi động container service Postgres 17, nạp `schema.sql`, kiểm tra syntax (`py_compile`, `node --check`), chạy lint (`ruff`, `actionlint`), chạy 59 test cases smoke test. Sau đó build image arm64 và scan bảo mật bằng Trivy.
 
 ## Tài liệu
 
