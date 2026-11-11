@@ -184,7 +184,7 @@ def as_int(value, field):
     try:
         return int(value)
     except (TypeError, ValueError):
-        raise ValueError("%s must be an integer" % field)
+        raise ValueError("%s must be an integer" % field) from None
 
 
 def payload():
