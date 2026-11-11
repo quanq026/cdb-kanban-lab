@@ -49,7 +49,7 @@ infra/
 .github/
   workflows/ci.yml       Postgres 17 + smoke test + syntax/lint
   workflows/deploy.yml   self-hosted runner trên VM
-  scripts/ci-smoke.py    57 case Flask test client
+  scripts/ci-smoke.py    59 case Flask test client
 
 docs/
   architecture.md        Sơ đồ, thành phần, data model, luồng request

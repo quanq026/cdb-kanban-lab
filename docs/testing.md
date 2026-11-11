@@ -1,6 +1,6 @@
 # Kiểm thử
 
-## 1. CI smoke — 57 case
+## 1. CI smoke — 59 case
 
 | | |
 |---|---|
@@ -8,7 +8,7 @@
 | Runner | `ubuntu-latest` + service `postgres:17`, DB `studydb` |
 | Chuẩn bị | cài `app/requirements.txt`, apply `infra/setup/schema.sql`, tạo `app_user` LOGIN least-privilege (assert `rolsuper=f`) |
 | Static | `py_compile`, `node --check app/app.js`, `bash -n` + `shellcheck`, `ruff check app .github/scripts` |
-| Test | `python .github/scripts/ci-smoke.py` — **57 PASS / 0 FAIL** |
+| Test | `python .github/scripts/ci-smoke.py` — **59 PASS / 0 FAIL** |
 
 `ci-smoke.py` dùng Flask test client (không cần gunicorn/nginx): auth 401/302, register
 201 + trùng 409, `/api/me`, tạo task `position=0,1,2`, reorder trong cột, đổi cột,

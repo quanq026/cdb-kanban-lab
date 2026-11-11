@@ -108,5 +108,5 @@ Backend validate lại toàn bộ; client chỉ validate để phản hồi nhan
   HSTS đặt ở nginx.
 - **Log**: một dòng mỗi request, không ghi body/header/mật khẩu.
 
-Bộ test thật của hợp đồng này: `.github/scripts/ci-smoke.py` (57 case, chạy trong CI).
+Bộ test thật của hợp đồng này: `.github/scripts/ci-smoke.py` (59 case, chạy trong CI).
 Xem [testing.md](testing.md).
