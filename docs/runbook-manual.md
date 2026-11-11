@@ -65,3 +65,31 @@ pg_lsclusters 2>/dev/null || echo "no local cluster"
 ```
 
 - [ ] `psql --version` vẫn chạy (giữ `postgresql-client-17`).
+
+## 2. Backup Neon → R2
+
+Workflow `backup.yml` chạy trên GitHub-hosted runner; repo không tự tạo bucket hay secret.
+
+- [ ] Tạo bucket R2 riêng cho backup (ví dụ `cdb-backup`), **không** public.
+- [ ] Tạo R2 API token quyền tối thiểu: Object Read & Write, giới hạn trong đúng bucket đó.
+      Ghi lại endpoint `https://<account-id>.r2.cloudflarestorage.com`.
+- [ ] (Tuỳ chọn, lưới an toàn thứ hai) Lifecycle rule xoá object sau 30 ngày — script đã
+      prune còn 14 bản, rule này chỉ dọn rác nếu script chết giữa đường.
+- [ ] Tạo GitHub Environment `backup` (Settings → Environments), thêm secrets:
+      `NEON_BACKUP_DSN`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
+      `R2_SECRET_ACCESS_KEY`, `RESTORE_TEST_DSN`; tuỳ chọn `NOTIFY_WEBHOOK`.
+      `NEON_BACKUP_DSN` dùng role owner (cần đọc mọi bảng); `RESTORE_TEST_DSN` trỏ vào
+      **Neon branch tạm** (khác production) mà role có quyền tạo/drop object.
+- [ ] Tạo branch tạm cho restore test và lấy DSN của nó; đặt tên cố định để dùng lại.
+- [ ] Chạy lần đầu để xác nhận:
+
+```bash
+gh workflow run backup.yml --ref main -f restore_test=true
+gh run watch
+```
+
+- [ ] Kiểm tra object trên R2: có `cdb-<stamp>.dump` và `cdb-<stamp>.json` dưới prefix `cdb/`.
+- [ ] Điền kết quả diễn tập thật: đã restore thử ngày `____`, kết quả `____`,
+      thời gian restore `____` phút (dùng để cập nhật RTO trong `operations.md`).
+- [ ] (Sau khi xác nhận) đặt required reviewer cho Environment `backup` nếu muốn chặn chạy
+      backup/restore ngoài ý muốn.

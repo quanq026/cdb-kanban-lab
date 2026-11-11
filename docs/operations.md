@@ -101,14 +101,86 @@ psql "$DSN" -v ON_ERROR_STOP=1 -f infra/migrations/2026-11-10-task-order.sql
 
 ## 5. Backup & restore
 
-| Việc | Cách làm |
-|---|---|
-| Backup app | Tự động mỗi lần deploy: `/opt/cdb/app/backup-*` |
-| Dump Neon | `pg_dump -Fc "$NEON_DSN" > backup.dump` |
-| Restore Neon | `pg_restore --exit-on-error --no-owner --no-privileges -d "$NEON_DSN" backup.dump` |
-| Backup định kỳ | **Chưa bật** — Neon Free không có PITR dài; dump thủ công khi cần |
+### 5.1. Kiến trúc
 
-Dump chứa dữ liệu thật: không commit, không để trong repo.
+Workflow `backup.yml` chạy trên GitHub-hosted `ubuntu-latest`, không phụ thuộc VM:
+
+```text
+Neon production ──pg_dump -Fc──► cdb-<stamp>.dump + .json (row counts) ──aws s3──► R2 cdb/
+```
+
+- Job `Backup`: cron hằng ngày 19:17 UTC (02:17 VN) và `workflow_dispatch`; dump, kiểm tra
+  `pg_restore -l` đọc được, upload dump + manifest counts, prune bản cũ.
+- Job `Restore newest dump`: cron thứ Hai 03:17 UTC (10:17 VN) hoặc `workflow_dispatch` với
+  input `restore_test`; tải bản mới nhất, restore vào `RESTORE_TEST_DSN`, so counts với
+  manifest và kiểm tra index `idx_tasks_user_status_position` + trigger
+  `trg_tasks_updated_at`. Script từ chối chạy nếu `RESTORE_TEST_DSN` trùng
+  `NEON_BACKUP_DSN`.
+- Fail → workflow đỏ (email GitHub). Nếu secret `NOTIFY_WEBHOOK` có giá trị thì gửi thêm
+  POST JSON kiểu Discord (`{"content": "..."}`).
+- Secret nằm trong GitHub Environment `backup`, không có trên VM: `NEON_BACKUP_DSN`,
+  `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+  `RESTORE_TEST_DSN` (+ tuỳ chọn `NOTIFY_WEBHOOK`). VM chết vẫn backup/restore được.
+- `deploy.sh` vẫn backup app + nginx conf vào `/opt/cdb/app/backup-<stamp>/` trên VM; bản
+  đó chỉ để rollback code, không thay thế backup DB.
+
+### 5.2. Lịch, retention, RPO/RTO
+
+| Mục | Giá trị |
+|---|---|
+| Lịch dump | Hằng ngày 02:17 VN (cron `17 19 * * *` UTC) |
+| Retention | `BACKUP_KEEP` bản mới nhất, mặc định 14 (2 tuần); mỗi bản có `.json` counts |
+| RPO | ≤ 24 h (mất tối đa dữ liệu phát sinh từ bản dump gần nhất) |
+| RTO | ~10–20 phút (restore vào branch mới, đổi `NEON_HOST`, restart app) |
+| Phạm vi | Logical dump; **chưa** có PITR/WAL, **chưa** diễn tập mất toàn máy/failover |
+
+Giữ N bản gần nhất thay vì 7 daily + 4 weekly vì dữ liệu nhỏ (dump vài trăm KB), 14 bản
+daily đã phủ 2 tuần và vẫn bắt được lỗi phát hiện muộn trong 1 tuần, không cần thêm tầng
+thư mục và logic prune. Đổi bằng biến `BACKUP_KEEP` trong workflow.
+
+### 5.3. Restore thủ công
+
+```bash
+export R2_ENDPOINT='https://<account-id>.r2.cloudflarestorage.com'
+export R2_BUCKET='<bucket>'
+export AWS_ACCESS_KEY_ID='<key>' AWS_SECRET_ACCESS_KEY='<secret>'
+
+aws --endpoint-url "$R2_ENDPOINT" s3 ls "s3://$R2_BUCKET/cdb/"
+aws --endpoint-url "$R2_ENDPOINT" s3 cp \
+  "s3://$R2_BUCKET/cdb/cdb-<stamp>.dump" ./restore.dump
+aws --endpoint-url "$R2_ENDPOINT" s3 cp \
+  "s3://$R2_BUCKET/cdb/cdb-<stamp>.json" ./cdb-<stamp>.json   # counts lúc dump
+
+# Tạo Neon branch mới từ main, dùng DSN role owner của branch đó
+pg_restore --exit-on-error --no-owner --no-privileges --clean --if-exists \
+  -d "$TARGET_DSN" ./restore.dump
+psql "$TARGET_DSN" -c 'SELECT count(*) FROM users' -c 'SELECT count(*) FROM tasks'
+rm -f ./restore.dump ./cdb-<stamp>.json
+```
+
+Kiểm tra xong thì trỏ app sang branch mới (`/etc/cdb/secrets.env` → `NEON_HOST`) rồi
+`sudo systemctl restart cdb-kanban`, hoặc promote branch. Không restore đè production đang
+chạy khi chưa có branch dự phòng. Dump chứa dữ liệu thật: không commit, không để trong repo.
+
+### 5.4. Chạy restore test
+
+```bash
+gh workflow run backup.yml --ref main -f restore_test=true
+gh run watch
+```
+
+Hoặc chạy tay trên máy có `psql` 17 + `awscli`:
+
+```bash
+export NEON_BACKUP_DSN='postgresql://...' RESTORE_TEST_DSN='postgresql://...'
+export R2_ENDPOINT='https://<account-id>.r2.cloudflarestorage.com' R2_BUCKET='<bucket>'
+export R2_ACCESS_KEY_ID='<key>' R2_SECRET_ACCESS_KEY='<secret>'
+bash infra/ops/restore-test.sh
+```
+
+In từng bước `PASS`/`FAIL`, exit code 1 nếu lệch counts hoặc thiếu index/trigger.
+
+Trạng thái diễn tập thật: **[chưa chạy]** — điền ngày + kết quả sau lần chạy đầu tiên.
 
 ## 6. TLS & domain
 
@@ -211,7 +283,8 @@ bật `includeSubDomains`/`preload`.
 - VM + IP + disk ≈ **$44.30/tháng** nếu chạy 24/7; deallocate sau demo.
 - Neon Free scale-to-zero sau 5 phút: request đầu sau idle ~1.9–3.1 s; pool có
   `check_connection` + retry nên không trả 500/503.
-- Chưa có backup định kỳ/PITR/failover.
+- Backup logical hằng ngày lên R2 (RPO ≤ 24 h), restore test hằng tuần; chưa có PITR và
+  chưa diễn tập mất toàn máy/failover.
 - Cert phụ thuộc `certbot.timer`; VM tắt quá lâu có thể hết hạn.
 - Không rate limit (xem [security.md](security.md) §6).
 - `/api/health?detail=1` chỉ xem được từ localhost (SSH vào VM hoặc `ssh -L`).
