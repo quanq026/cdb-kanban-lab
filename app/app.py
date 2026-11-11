@@ -45,7 +45,7 @@ CONN_INFO = {
     "dbname": _env("DB_NAME"),
     "user": _env("DB_USER"),
     "password": _env("DB_PASSWORD"),
-    "sslmode": os.environ.get("DB_SSLMODE", "verify-full"),
+    "sslmode": os.environ.get("DB_SSLMODE", "prefer"),
     "connect_timeout": 15,
     "application_name": "cdb-kanban",
 }

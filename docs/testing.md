@@ -1,67 +1,80 @@
 # Kiểm thử
 
-## 1. CI smoke — 59 case
+Tài liệu hướng dẫn quy trình kiểm thử tự động trong CI/CD, kiểm thử thủ công và kiểm thử hạ tầng cho dự án **CDB Kanban**.
 
-| | |
-|---|---|
-| Workflow | `.github/workflows/ci.yml` (push/PR `main`, `workflow_dispatch`) |
-| Runner | `ubuntu-latest` + service `postgres:17`, DB `studydb` |
-| Chuẩn bị | cài `app/requirements.txt`, apply `infra/setup/schema.sql`, tạo `app_user` LOGIN least-privilege (assert `rolsuper=f`) |
-| Static | `py_compile`, `node --check app/app.js`, `bash -n` + `shellcheck`, `ruff check app .github/scripts` |
-| Test | `python .github/scripts/ci-smoke.py` — **59 PASS / 0 FAIL** |
+---
 
-`ci-smoke.py` dùng Flask test client (không cần gunicorn/nginx): auth 401/302, register
-201 + trùng 409, `/api/me`, tạo task `position=0,1,2`, reorder trong cột, đổi cột,
-validate (title rỗng/201 ký tự, status sai, position âm, thiếu field), timestamp
-(`updated_at` tăng, `created_at` giữ), delete 200/404, logout/login, health 2 mức, và
-tự dọn `ci-*` (kết thúc `no leftover ci-* users`).
+## 1. Kiểm thử tự động trên CI (GitHub Actions)
 
-Chạy local (cần một Neon branch/DB đã apply schema và env `DB_*` trỏ tới đó):
+Bộ kiểm thử tự động được cấu hình trong file `.github/workflows/ci.yml`, tự động kích hoạt trên mỗi `push` vào nhánh `main` và trên mọi `pull_request`.
 
+| Hạng mục | Công cụ / Môi trường | Chi tiết kiểm tra |
+|---|---|---|
+| **Database Service** | `postgres:17` (Docker container) | Khởi tạo service DB, nạp `infra/setup/schema.sql` và `infra/setup/seed.sql` |
+| **Kiểm tra cú pháp** | `python -m py_compile`, `node --check` | Đảm bảo không có lỗi cú pháp trong `app/app.py`, `app/app.js` và `ci-smoke.py` |
+| **Linting code** | `ruff check app .github/scripts` | Kiểm tra chuẩn code Python, phát hiện biến thừa, import không dùng, v.v. |
+| **Linting Workflow** | `actionlint` | Kiểm tra tính đúng đắn của các file GitHub Actions workflow |
+| **Smoke Tests** | `python .github/scripts/ci-smoke.py` | **59 test cases** chạy qua Flask Test Client (59 PASS / 0 FAIL) |
+| **Container Build & Scan** | Docker build & `trivy` | Đóng gói image Docker trên kiến trúc ARM64 và quét lỗ hổng bảo mật (CVE) |
+
+---
+
+## 2. Chạy kiểm thử tự động ở máy Local
+
+Bạn có thể chạy toàn bộ 59 ca kiểm thử khói (smoke test) ngay trên máy phát triển của mình:
+
+### Bước 1: Khởi động container PostgreSQL nội bộ
 ```bash
+docker compose up db -d
+```
+Container `cdb-db` sẽ khởi động và nạp sẵn schema cùng dữ liệu mẫu trên cổng `127.0.0.1:5432`.
+
+### Bước 2: Thiết lập môi trường và chạy test
+```bash
+# Cài đặt thư viện (nếu chưa cài)
+python -m venv .venv
+source .venv/bin/activate  # Trên Windows: .venv\Scripts\activate
+pip install -r app/requirements.txt
+
+# Thiết lập biến môi trường trỏ vào DB container
+export DB_HOST=127.0.0.1
+export DB_PORT=5432
+export DB_NAME=studydb
+export DB_USER=app_user
+export DB_PASSWORD=kanban_internal_secret_2026
+export DB_SSLMODE=disable
+export APP_SECRET_KEY=local-test-secret-key-32-chars-long
+
+# Chạy smoke test
 python .github/scripts/ci-smoke.py
 ```
+Kết quả mong đợi: Toàn bộ 59 test cases đều in `PASS` và kết thúc với `no leftover ci-* users`.
 
-Deploy tự chạy sau CI xanh trên `main` qua self-hosted runner `cdb-vm`; xem
-[operations.md](operations.md) §2.
+---
 
-## 2. Kiểm thử giao diện (thủ công)
+## 3. Kiểm thử giao diện người dùng (UI Checklist)
 
-| Bước | Kỳ vọng |
-|---|---|
-| `/` chưa đăng nhập | 302 `/login`, không lộ board |
-| Đăng ký mật khẩu 7 ký tự / nhập lại sai | chặn ở client, không gửi request |
-| Đăng ký hợp lệ | 201 → `/`, board trống `0/0/0` + 3 empty state |
-| Footer | `#footer` = `null` |
-| Menu avatar | mở email + Đăng xuất; click ngoài/Esc đóng, Esc trả focus |
-| Theme | `auto → light → dark → auto`; nền `rgb(251,250,247)` ↔ `rgb(22,21,19)` |
-| `N` / `/` | mở dialog thêm việc / focus tìm kiếm |
-| Thêm/sửa/chuyển/xoá | optimistic, toast, dialog xác nhận; lỗi thì hoàn tác |
-| Sắp thứ tự trong cột | nút `↑`/`↓` (ẩn tác dụng khi đang lọc) + kéo–thả; reload vẫn giữ thứ tự |
-| Kéo–thả | có ô chèn nhấp nháy đúng vị trí, các thẻ bên dưới trượt ra; thả là chèn đúng index |
-| Chuyển cột `←`/`→` hoặc kéo | append cuối cột đích, `position` do server cấp |
-| Đăng xuất | về `/login`; `/api/me`, `/api/tasks` = 401 |
-| Console | 0 error |
-
-## 3. Kiểm thử hạ tầng (thủ công)
-
-| Việc | Cách kiểm | Kỳ vọng |
+| Kịch bản kiểm thử | Thao tác thực hiện | Kết quả kỳ vọng |
 |---|---|---|
-| DB dev | Neon branch riêng + `psql -f infra/setup/schema.sql` | schema áp dụng, `app_user` CRUD được |
-| Least privilege | `psql` bằng `app_user` | không đọc được `pg_authid`, không `CREATE/DROP TABLE` |
-| Restore Neon | `pg_restore --exit-on-error --no-owner` | TLS `verify-full`, `app_user` CRUD OK |
-| TLS Neon | `psql "sslmode=verify-full ..."` | TLSv1.3, cert hợp lệ |
-| 5432 từ Internet | `Test-NetConnection` | `TcpTestSucceeded=False` |
-| HTTPS origin | `openssl s_client` | `Verify return code: 0`, TLSv1.3 |
-| TLS 1.1 | `openssl s_client -tls1_1` | handshake failure (đúng) |
-| Cert renew | `certbot renew --dry-run` | PASS, deploy hook reload nginx |
-| Neon cold start | `curl /api/health` sau 5 phút idle | không 503 sau scale-to-zero |
+| **Chưa đăng nhập** | Truy cập `https://<domain>/` | Tự động chuyển hướng (302) về `/login`, không lộ bảng Kanban |
+| **Đăng ký tài khoản** | Nhập email và mật khẩu ≥ 8 ký tự | Đăng ký thành công (201), tự động chuyển vào trang chủ với bảng trống |
+| **Xác thực mật khẩu yếu** | Nhập mật khẩu < 8 ký tự hoặc nhập lại không khớp | Form chặn ngay ở trình duyệt, hiển thị thông báo lỗi rõ ràng |
+| **Đăng nhập** | Nhập email và mật khẩu đúng | Đăng nhập thành công, hiển thị đúng email ở menu góc phải |
+| **Đổi giao diện (Theme)** | Nhấn nút icon ◐ ở topbar | Chuyển đổi mượt mà giữa chế độ Tự động → Sáng → Tối |
+| **Thêm công việc** | Nhấn phím tắt `N` hoặc nút "Thêm việc" | Dialog mở ra; nhập tiêu đề và Enter tạo thẻ mới ở đầu cột "Todo" |
+| **Kéo thả / Đổi cột** | Kéo thẻ từ "Todo" sang "Doing" hoặc "Done" | Thẻ di chuyển mượt mà, vị trí và trạng thái được lưu bền vững khi F5 |
+| **Đổi thứ tự trong cột** | Dùng nút mũi tên ↑ / ↓ hoặc kéo thẻ đổi vị trí | Thứ tự `position` được cập nhật liên tục |
+| **Xóa công việc** | Nhấn icon xóa thùng rác | Hiển thị hộp thoại xác nhận trước khi xóa vĩnh viễn |
+| **Đăng xuất** | Mở menu tài khoản → Nhấn "Đăng xuất" | Xóa cookie phiên đăng nhập và chuyển hướng về trang `/login` |
 
-## 4. Nguyên tắc khi sửa
+---
 
-1. Sửa hành vi → chạy `ci-smoke.py` + kiểm tay các luồng chính.
-2. Sửa UI → kiểm browser thật (desktop/mobile, light/dark, kéo–thả); `?v=` tự sinh từ
-   nội dung asset, không sửa tay.
-3. Sửa schema → migration up/down + diễn tập rollback trong transaction + smoke test.
-4. Test/seed phải tự dọn dữ liệu; không để lại tài khoản test trên production.
-5. Không đưa secret vào test; không in mật khẩu/hash ra output.
+## 4. Kiểm thử hạ tầng & Triển khai thực tế
+
+| Hạng mục kiểm tra | Lệnh thực hiện | Kết quả kỳ vọng |
+|---|---|---|
+| **Health Check công khai** | `curl -sS https://<domain>/api/health` | `{"db_user":"app_user","ok":true,"status":"ok"}` |
+| **Health Check chi tiết (Localhost)** | `curl -sS http://127.0.0.1:8000/api/health?detail=1` | Trả về thông tin chi tiết (`database`, `backend_addr`, `db_host`, `sslmode`) |
+| **Chứng chỉ TLS / HTTPS** | `curl -Iv https://<domain>/` | Bắt tay TLS thành công (TLS 1.2 / TLS 1.3), chứng chỉ Let's Encrypt hợp lệ |
+| **Cổng database không lộ** | `nc -zv <IP-VPS> 5432` hoặc `Test-NetConnection` | Bị từ chối kết nối (Connection refused / Timeout) từ bên ngoài Internet |
+| **Bảo toàn dữ liệu qua Restart** | Tạo task mới → Chạy `docker compose restart` → F5 trang web | Toàn bộ dữ liệu vẫn nguyên vẹn do được lưu trong volume `db_data` |

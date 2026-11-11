@@ -89,7 +89,7 @@ Backend validate lại toàn bộ; client chỉ validate để phản hồi nhan
 | Body/validate sai, `CHECK` violation, FK violation | 400 | `invalid_request`, `check_violation`, `foreign_key_violation` |
 | Trùng email khi đăng ký | 409 | `unique_violation` |
 | Task không tồn tại / không thuộc user | 404 | `not_found` |
-| Không kết nối được DB (Neon ngủ/lỗi mạng) | 503 | `db_unavailable` |
+| Không kết nối được DB (lỗi mạng / DB đang khởi động) | 503 | `db_unavailable` |
 | Lỗi DB khác / lỗi không lường trước | 500 | `db_error`, `internal_error` |
 
 **Không có `429`**: toàn bộ rate limit đã bị bỏ (ghi, login, đăng ký). Xem đánh đổi ở
@@ -105,7 +105,7 @@ Backend validate lại toàn bộ; client chỉ validate để phản hồi nhan
   `no-cache` ở origin; URL trong HTML có `?v=<hash>` do app tự sinh.
 - **Security header** (app): `X-Content-Type-Options`, `X-Frame-Options`,
   `Referrer-Policy`, `Permissions-Policy`, `Content-Security-Policy` (`default-src 'self'`).
-  HSTS đặt ở nginx.
+  HSTS do Caddy tự động quản lý qua HTTPS.
 - **Log**: một dòng mỗi request, không ghi body/header/mật khẩu.
 
 Bộ test thật của hợp đồng này: `.github/scripts/ci-smoke.py` (59 case, chạy trong CI).

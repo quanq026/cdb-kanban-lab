@@ -8,8 +8,7 @@ WORKDIR /app
 RUN useradd --system --uid 10001 --user-group --home-dir /app app
 
 COPY app/requirements.txt /tmp/requirements.txt
-# python:3.12-slim ships ca-certificates; fail the build if the CA bundle the app
-# needs for verify-full ever disappears.
+# python:3.12-slim ships ca-certificates; verify standard CA bundle exists.
 RUN test -s /etc/ssl/certs/ca-certificates.crt \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
     && rm -f /tmp/requirements.txt
