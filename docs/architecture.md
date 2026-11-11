@@ -23,7 +23,7 @@ Docker: cdb-db (postgres:17-alpine)
 ```
 
 - **Mạng cô lập**: Giao tiếp giữa `caddy`, `app` và `db` diễn ra trên mạng Docker nội bộ.
-- **Bảo mật cổng**: Chỉ cổng 80 và 443 mở ra Internet. Cổng 5432 của database chỉ bind vào `127.0.0.1` của máy host (phục vụ backup/dev local an toàn).
+- **Bảo mật cổng**: Chỉ cổng 80 và 443 mở ra Internet. Cổng 5432 của database chỉ bind vào `127.0.0.1` của máy host (phục vụ dev local an toàn).
 - **Phân quyền ứng dụng**: App container chạy non-root (`UID 10001`), `read_only: true`, `cap_drop: ALL`, `no-new-privileges`, tmpfs cho `/tmp`.
 
 ## 2. Thành phần
@@ -103,6 +103,6 @@ docker compose up -d --build
 | PostgreSQL 17 container nội bộ | Độc lập hoàn toàn, không phụ thuộc cloud ngoài, tự động nạp schema/seed lần đầu |
 | Caddy Reverse Proxy | Tự động hóa 100% việc cấp phát và gia hạn SSL Let's Encrypt, cấu hình cực ngắn |
 | Tối giản `.env` | Mọi thông số DB nội bộ đều có giá trị mặc định an toàn; người dùng chỉ cần điền DOMAIN và SECRET_KEY |
-| Bind DB `127.0.0.1:5432` | Host có thể backup `pg_dump` hoặc chạy dev trực tiếp mà không mở port ra Internet |
+| Bind DB `127.0.0.1:5432` | Host có thể chạy dev trực tiếp mà không mở port ra Internet |
 | Container read-only, non-root | Giảm thiểu bề mặt tấn công nếu app có lỗ hổng; chỉ `/tmp` cho phép ghi tạm |
 | Không cần build ngoài | Bất kỳ máy nào có Docker Compose đều có thể build và chạy ngay lập tức |

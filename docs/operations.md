@@ -75,35 +75,7 @@ Lệnh trên sẽ tự động rebuild image app mới và áp dụng thay đổ
 
 ---
 
-## 3. Sao lưu & Phục hồi cơ sở dữ liệu
-
-Cơ sở dữ liệu PostgreSQL được lưu trữ bền vững trong Docker volume `db_data`.
-
-### 3.1. Sao lưu (Backup)
-Tạo file backup dạng nhị phân nén (`custom` format) bằng lệnh:
-```bash
-docker exec -t cdb-db pg_dump -U app_user -d studydb -Fc > cdb_backup_$(date +%Y%m%d_%H%M%S).dump
-```
-*Hoặc nếu trên host đã cài `postgresql-client`:*
-```bash
-PGPASSWORD=kanban_internal_secret_2026 pg_dump -h 127.0.0.1 -p 5432 -U app_user -d studydb -Fc > backup.dump
-```
-
-### 3.2. Phục hồi (Restore)
-Phục hồi dữ liệu từ file `.dump` đã sao lưu:
-```bash
-cat cdb_backup_xxxx.dump | docker exec -i cdb-db pg_restore -U app_user -d studydb --clean --if-exists
-```
-
-### 3.3. Tự động hóa sao lưu bằng Cron (Gợi ý)
-Thêm cron job chạy hằng ngày vào crontab (`crontab -e`):
-```cron
-0 2 * * * cd /path/to/cdb-kanban-lab && docker exec -t cdb-db pg_dump -U app_user -d studydb -Fc > /var/backups/cdb_$(date +\%F).dump && find /var/backups/cdb_* -mtime +30 -delete
-```
-
----
-
-## 4. Xử lý sự cố (Troubleshooting)
+## 3. Xử lý sự cố (Troubleshooting)
 
 | Hiện tượng | Nguyên nhân có thể | Cách khắc phục |
 |---|---|---|
@@ -115,11 +87,11 @@ Thêm cron job chạy hằng ngày vào crontab (`crontab -e`):
 
 ---
 
-## 5. Dọn dẹp & Gỡ bỏ hoàn toàn
+## 4. Dọn dẹp & Gỡ bỏ hoàn toàn
 
 Nếu muốn dừng và gỡ bỏ hoàn toàn dự án cùng toàn bộ dữ liệu database:
 ```bash
 docker compose down -v --rmi all
 ```
 > [!CAUTION]
-> Tham số `-v` sẽ xóa vĩnh viễn volume `db_data` (chứa dữ liệu người dùng và task) cùng các volume SSL của Caddy. Hãy đảm bảo bạn đã tạo bản sao lưu trước khi thực hiện.
+> Tham số `-v` sẽ xóa vĩnh viễn volume `db_data` (chứa dữ liệu người dùng và task) cùng các volume SSL của Caddy. Nếu chỉ chạy `docker compose down` (không có `-v`), dữ liệu database vẫn được bảo toàn.

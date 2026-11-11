@@ -31,7 +31,7 @@ git pull && docker compose up -d --build
 - **Lỗi chứng chỉ SSL:** Đảm bảo bản ghi DNS (A/AAAA) đã trỏ đúng về IP VPS trước khi chạy compose để Caddy cấp chứng chỉ.
 - **Nếu dùng Cloudflare Proxy:** Đặt SSL/TLS ở chế độ **Full (strict)** để tránh lỗi vòng lặp chuyển hướng (301 redirect loop).
 
-Chi tiết vận hành nâng cao, backup, bảo mật xem tại thư mục [docs/](docs/).
+Chi tiết vận hành nâng cao và bảo mật xem tại thư mục [docs/](docs/).
 
 ---
 
@@ -103,6 +103,6 @@ Yêu cầu: Python 3.12+ và database Postgres 17 (hoặc chạy `docker compose
 ## Giới hạn
 
 - Demo, không dùng cho dữ liệu thực tế nhạy cảm: **không rate limit tầng app**, không CAPTCHA/2FA/xác thực email.
+- **Không có cơ chế sao lưu tự động (No backup)**: Đây là bản demo dữ liệu tinh gọn. Dữ liệu chỉ tồn tại trong Docker volume `db_data`; mất volume hoặc VPS là mất dữ liệu. Lệnh `docker compose down -v` xoá sạch dữ liệu (còn `docker compose down` thì giữ).
 - Session cookie ký phía client (`HttpOnly`, `SameSite=Lax`, `Secure`); đổi `APP_SECRET_KEY` sẽ thu hồi toàn bộ session.
-- Backup là logical dump hằng ngày lên R2 (RPO ≤ 24 h); chưa có PITR.
 - Migration database chạy thủ công bằng psql; deploy không tự ý chạy DDL.

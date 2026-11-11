@@ -19,7 +19,7 @@ Tài liệu mô tả chi tiết các biện pháp và kiến trúc bảo mật c
 |---|---|---|---|
 | `80` | HTTP | Toàn cầu (Public) | Nhận request từ người dùng; Caddy tự động chuyển hướng 301 sang HTTPS |
 | `443` | HTTPS | Toàn cầu (Public) | Điểm truy cập web chính thống, mã hóa TLS |
-| `5432` | PostgreSQL | Nội bộ host (`127.0.0.1`) | Chỉ mở cho chính máy host để chạy backup `pg_dump` hoặc dev local; **không** mở ra Internet |
+| `5432` | PostgreSQL | Nội bộ host (`127.0.0.1`) | Chỉ mở cho chính máy host để chạy dev local; **không** mở ra Internet |
 | `8000` | HTTP | Mạng nội bộ Docker | Gunicorn lắng nghe trong mạng bridge nội bộ; chỉ Caddy mới gọi tới |
 
 - Caddy là cổng ngõ duy nhất tiếp nhận request từ bên ngoài Internet.
