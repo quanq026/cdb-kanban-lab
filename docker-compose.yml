@@ -1,8 +1,25 @@
 services:
+  db:
+    image: postgres:17-alpine
+    container_name: cdb-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-studydb}
+      POSTGRES_USER: ${DB_USER:-app_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kanban_internal_secret_2026}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./infra/setup/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./infra/setup/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-app_user} -d ${DB_NAME:-studydb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     container_name: cdb-app
-    env_file: .env
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -14,6 +31,17 @@ services:
     mem_limit: 256m
     expose:
       - "8000"
+    env_file: .env
+    environment:
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-studydb}
+      DB_USER: ${DB_USER:-app_user}
+      DB_PASSWORD: ${DB_PASSWORD:-kanban_internal_secret_2026}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+    depends_on:
+      db:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
@@ -38,5 +66,6 @@ services:
       - app
 
 volumes:
+  db_data:
   caddy_data:
   caddy_config:

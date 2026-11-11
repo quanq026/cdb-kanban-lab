@@ -1,6 +1,6 @@
 # CDB Kanban
 
-Ứng dụng Kanban nhỏ (Flask + PostgreSQL 17) tinh gọn, chạy được trên bất kỳ VPS nào qua Docker Compose, tích hợp reverse proxy Caddy tự động cấp SSL. Database có thể dùng Neon (managed Postgres) hoặc bất kỳ instance PostgreSQL 17 nào.
+Ứng dụng Kanban nhỏ (Flask + PostgreSQL 17) tinh gọn, chạy trọn gói trên bất kỳ VPS nào qua Docker Compose (bao gồm App, PostgreSQL 17 và Caddy tự động cấp SSL). Cắm là chạy (Plug & Play), không cần cấu hình database hay dịch vụ bên ngoài.
 
 | | |
 |---|---|
@@ -10,21 +10,16 @@
 
 ## Bắt đầu nhanh
 
-**Yêu cầu:** VPS (Ubuntu/Debian) đã cài Docker & Docker Compose, 1 domain trỏ về IP VPS, Database Postgres 17 (Neon hoặc tự host).
+**Yêu cầu:** VPS (Ubuntu/Debian) đã cài Docker & Docker Compose, 1 domain trỏ về IP VPS.
 
-### 5 bước triển khai:
+### 3 bước triển khai:
 1. Clone repo: `git clone <repo-url> && cd cdb-kanban-lab`
-2. Khởi tạo DB (nếu là database trống):
-   ```bash
-   psql "$DB_OWNER_URL" -v ON_ERROR_STOP=1 -f infra/setup/schema.sql
-   psql "$DB_OWNER_URL" -v ON_ERROR_STOP=1 -v app_user_password='<password>' -f infra/setup/app_user.sql
-   # Tuỳ chọn nạp dữ liệu mẫu: psql "$DB_OWNER_URL" -f infra/setup/seed.sql
-   ```
-3. Tạo file cấu hình: `cp .env.example .env`
-   - Điền `DOMAIN=<your-domain.com>`, thông tin `DB_*` với user `app_user`.
-   - Sinh secret key: `openssl rand -hex 32` rồi điền vào `APP_SECRET_KEY`.
-4. Khởi chạy: `docker compose up -d --build`
-5. Truy cập `https://<your-domain.com>` (Caddy tự động cấp phát SSL Let's Encrypt).
+2. Tạo file cấu hình: `cp .env.example .env`
+   - Điền `DOMAIN=<your-domain.com>`
+   - Sinh mã bí mật bằng `openssl rand -hex 32` rồi điền vào `APP_SECRET_KEY`
+   *(Database PostgreSQL 17 nội bộ đã được cấu hình tự động sẵn trong Docker, không cần cài đặt hay chạy lệnh SQL gì thêm).*
+3. Khởi chạy: `docker compose up -d --build`
+4. Mở trình duyệt truy cập `https://<your-domain.com>` (Caddy tự cấp phát SSL Let's Encrypt, Postgres tự khởi tạo bảng và dữ liệu mẫu).
 
 ### Cập nhật khi có bản mới:
 ```bash
