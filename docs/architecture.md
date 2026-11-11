@@ -36,7 +36,7 @@ Docker: cdb-db (postgres:17-alpine)
 | Application | Flask 3.1, Gunicorn 26.2, Psycopg 3.3, Psycopg-pool 3.3 |
 | Database | PostgreSQL 17 (`postgres:17-alpine`), DB `studydb`, role `app_user` |
 | Volume lưu trữ | `db_data` (Postgres data), `caddy_data` (SSL certs), `caddy_config` |
-| Image build | Build trực tiếp từ `Dockerfile` tại máy đích hoặc pull từ GHCR |
+| Image build | Build trực tiếp từ `Dockerfile` tại máy chủ qua Docker Compose |
 
 ## 3. Data model
 

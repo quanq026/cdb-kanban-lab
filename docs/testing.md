@@ -15,7 +15,7 @@ Bộ kiểm thử tự động được cấu hình trong file `.github/workflow
 | **Linting code** | `ruff check app .github/scripts` | Kiểm tra chuẩn code Python, phát hiện biến thừa, import không dùng, v.v. |
 | **Linting Workflow** | `actionlint` | Kiểm tra tính đúng đắn của các file GitHub Actions workflow |
 | **Smoke Tests** | `python .github/scripts/ci-smoke.py` | **59 test cases** chạy qua Flask Test Client (59 PASS / 0 FAIL) |
-| **Container Build & Scan** | Docker build & `trivy` | Đóng gói image Docker trên kiến trúc ARM64 và quét lỗ hổng bảo mật (CVE) |
+| **Container Build** | `docker build` & `hadolint` | Kiểm tra Dockerfile bằng hadolint và xác nhận build image thành công |
 
 ---
 

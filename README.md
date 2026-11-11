@@ -63,7 +63,7 @@ infra/
     schema.sql           DDL users/tasks + index + trigger
 
 .github/
-  workflows/ci.yml       Test Postgres 17 + lint + build/scan/push image arm64
+  workflows/ci.yml       Test Postgres 17 + lint + actionlint + docker build
   dependabot.yml         pip, github-actions, docker (hằng tuần)
   scripts/ci-smoke.py    59 case Flask test client
 
@@ -93,7 +93,7 @@ Yêu cầu: Python 3.12+ và database Postgres 17 (hoặc chạy `docker compose
 
 ## CI/CD
 
-- **CI (`.github/workflows/ci.yml`):** Tự động kích hoạt khi push/PR `main`: khởi động container service Postgres 17, nạp `schema.sql`, kiểm tra syntax (`py_compile`, `node --check`), chạy lint (`ruff`, `actionlint`), chạy 59 test cases smoke test. Sau đó build image arm64 và scan bảo mật bằng Trivy.
+- **CI (`.github/workflows/ci.yml`):** Tự động kích hoạt khi push/PR `main`: khởi động container service Postgres 17, nạp `schema.sql`, kiểm tra syntax (`py_compile`, `node --check`), chạy lint (`ruff`, `actionlint`), chạy 59 test cases smoke test và kiểm tra build image (`hadolint`, `docker build`).
 
 ## Tài liệu
 
