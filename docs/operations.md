@@ -36,8 +36,8 @@ sudo bash infra/ops/deploy.sh "$PWD"
 Override khi cần: `APP_OWNER`, `APP_GROUP`, `DOMAIN` (mặc định lấy owner/group của
 `/opt/cdb/app` và domain trong script).
 
-**Bắt buộc:** mỗi lần sửa `app.css`/`app.js`, tăng `?v=` trong `app/index.html`,
-`app/login.html`, `app/register.html`. Cloudflare cache asset ~4 h.
+**Asset:** `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css`/`/app.js` lúc khởi động;
+deploy restart nên URL đổi khi nội dung đổi (Cloudflare cache ~4 h).
 
 Kiểm tra sau deploy:
 
@@ -117,6 +117,10 @@ Dump chứa dữ liệu thật: không commit, không để trong repo.
 | ACME | HTTP-01 webroot `/var/www/letsencrypt` |
 | Cloudflare | `ssl=strict`, `min_tls_version=1.2`, `always_use_https=on`, HTTP/3 + Brotli |
 | Header | HSTS 180 ngày, nosniff, SAMEORIGIN, Referrer-Policy, Permissions-Policy |
+
+Đổi domain: sửa cả biến `DOMAIN` (`deploy.yml` hoặc env khi chạy tay) và
+`infra/ops/nginx-cdb.conf` (redirect, `server_name`, đường dẫn cert), rồi chạy lại
+`infra/setup/https.sh`.
 
 ```bash
 sudo certbot certificates

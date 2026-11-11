@@ -38,7 +38,7 @@ app/                     Ứng dụng (deploy vào /opt/cdb/app)
 infra/
   setup/
     schema.sql           DDL users/tasks + index + trigger (CI dùng)
-    vm.sh                swap, Docker, nginx, psql 17, venv, systemd unit
+    vm.sh                swap, nginx, psql 17, venv, systemd unit
     https.sh             Let's Encrypt + nginx TLS + renewal hook
   ops/
     deploy.sh            backup + install + health + rollback
@@ -49,7 +49,7 @@ infra/
 .github/
   workflows/ci.yml       Postgres 17 + smoke test + syntax/lint
   workflows/deploy.yml   self-hosted runner trên VM
-  scripts/ci-smoke.py    57 case Flask test client
+  scripts/ci-smoke.py    59 case Flask test client
 
 docs/
   architecture.md        Sơ đồ, thành phần, data model, luồng request
@@ -98,8 +98,8 @@ push main ──► CI (ubuntu-latest): Postgres 17 + schema + ci-smoke.py + lin
   outbound HTTPS, không mở SSH cho GitHub).
 - `deploy.sh` backup `/opt/cdb/app` + nginx conf vào `/opt/cdb/app/backup-<stamp>/`, cài
   file, `nginx -t`, reload, restart, health-check retry 10×2 s; lỗi → tự rollback.
-- Mỗi lần đổi `app.css`/`app.js` phải tăng `?v=` trong **cả ba** HTML (Cloudflare cache
-  asset ~4 h).
+- `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css` và `/app.js` một lần lúc khởi động;
+  deploy restart nên asset mới có URL mới (Cloudflare cache ~4 h).
 
 Chạy lại deploy thủ công:
 

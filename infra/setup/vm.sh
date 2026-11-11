@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time VM bootstrap.
 #
-# Installs system packages (swap, Docker, nginx, PostgreSQL client 17), creates
+# Installs system packages (swap, nginx, PostgreSQL client 17), creates
 # the app venv, writes /etc/cdb/app.env from /etc/cdb/secrets.env, and installs
 # the systemd unit. App files and the nginx site are pushed afterwards by
 # infra/ops/deploy.sh from a repo checkout.
@@ -29,7 +29,7 @@ fi
 # 2. Base packages.
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg lsb-release nginx \
-  python3-venv python3-pip docker.io >/dev/null
+  python3-venv python3-pip >/dev/null
 
 # 3. PostgreSQL 17 client from the PGDG repository.
 install -d /usr/share/postgresql-common/pgdg
@@ -40,10 +40,8 @@ echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] h
 apt-get update -qq
 apt-get install -y -qq postgresql-client-17 >/dev/null
 
-# 4. Enable services and grant Docker access.
-systemctl enable --now docker >/dev/null 2>&1
+# 4. Enable nginx.
 systemctl enable --now nginx >/dev/null 2>&1
-usermod -aG docker "$APP_USER"
 
 # 5. App dirs and Python venv.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -110,7 +108,6 @@ systemctl enable cdb-kanban >/dev/null
 
 # 8. Summary.
 echo "swap:   $(swapon --show=NAME,SIZE --noheadings | tr '\n' ' ')"
-echo "docker: $(docker --version)"
 echo "nginx:  $(nginx -v 2>&1)"
 echo "psql:   $(psql --version)"
 echo "arch:   $(uname -m)"

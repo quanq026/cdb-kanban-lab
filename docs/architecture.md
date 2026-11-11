@@ -76,7 +76,8 @@ Kanban có 3 cột Todo/Doing/Done — boolean không biểu diễn được `do
 
 1. **Trang tĩnh** (`/`, `/login`, `/register`, `/app.css`, `/app.js`): Flask phục vụ file
    trong `/opt/cdb/app`. Trang và API trả `Cache-Control: no-store`; CSS/JS trả `no-cache`
-   ở origin, nhưng Cloudflare vẫn cache ~4 h → **bắt buộc tăng `?v=`** khi đổi asset.
+   ở origin. `app.py` gắn `?v=<sha1 8 ký tự>` vào hai asset một lần lúc khởi động, nên URL
+   đổi khi nội dung đổi.
 2. **Xác thực**: `before_request` chặn mọi trang (trừ `/login`, `/register`, asset) và mọi
    `/api/*` (trừ `/api/login`, `/api/register`, `/api/health`). Thiếu session → API 401
    JSON, trang 302 `/login`.
@@ -122,7 +123,7 @@ Rollback tự động nằm trong `infra/ops/deploy.sh` (`trap ERR`). Quy trình
 | `/api/health` hai mức | Bản công khai không lộ host/database/sslmode; `?detail=1` chỉ localhost |
 | Không rate limit | Đánh đổi được ghi ở [security.md](security.md) §6 |
 | `DELETE` dùng query string | Body trên DELETE không được mọi proxy/client xử lý nhất quán |
-| 1 CSS + 1 JS, CSP không `unsafe-inline` | Dễ cache/bump `?v=`, CSP chặt, không inline script/style |
+| 1 CSS + 1 JS, CSP không `unsafe-inline` | Asset cache bằng `?v=` tự sinh, CSP chặt, không inline script/style |
 
 ## 7. Khác so với đề bài
 

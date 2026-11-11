@@ -23,6 +23,9 @@ jobs:
     runs-on: [self-hosted, cdb-vm]
     timeout-minutes: 15
 
+    env:
+      DOMAIN: kanban.akaine.io.vn
+
     steps:
       - name: Checkout tested commit
         uses: actions/checkout@v4
@@ -37,8 +40,8 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS --max-time 20 http://127.0.0.1:8000/api/health
-          curl -fsS --max-time 20 -k --resolve kanban.akaine.io.vn:443:127.0.0.1 \
-            https://kanban.akaine.io.vn/api/health
+          curl -fsS --max-time 20 -k --resolve "$DOMAIN:443:127.0.0.1" \
+            "https://$DOMAIN/api/health"
           curl -fsS -o /dev/null -w 'login=%{http_code}\n' --max-time 20 \
-            -k --resolve kanban.akaine.io.vn:443:127.0.0.1 \
-            https://kanban.akaine.io.vn/login
+            -k --resolve "$DOMAIN:443:127.0.0.1" \
+            "https://$DOMAIN/login"

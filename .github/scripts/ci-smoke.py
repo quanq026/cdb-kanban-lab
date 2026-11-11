@@ -212,6 +212,11 @@ def main():
         r = client.get("/api/me")
         expect(r.status_code == 200, "session restored after login")
 
+        # --- cache-busted assets ---
+        html_first = client.get("/").get_data(as_text=True)
+        expect("?v=" in html_first, "index HTML versions app.css/app.js")
+        expect(client.get("/").get_data(as_text=True) == html_first, "asset version is stable")
+
         # --- health ---
         r = client.get("/api/health")
         body = r.get_json()

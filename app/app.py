@@ -1,10 +1,11 @@
+import hashlib
 import logging
 import os
 import re
 import time
 from datetime import timedelta
 
-from flask import Flask, g, jsonify, redirect, request, send_from_directory, session
+from flask import Flask, g, jsonify, redirect, request, session
 from psycopg import OperationalError
 from psycopg import errors as pg_errors
 from psycopg.rows import dict_row
@@ -75,6 +76,22 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
 app.logger.setLevel(logging.INFO)
+
+
+def _asset_version(name):
+    with open(os.path.join(APP_DIR, name), "rb") as fh:
+        return hashlib.sha1(fh.read()).hexdigest()[:8]
+
+
+def _render_page(name):
+    with open(os.path.join(APP_DIR, name), encoding="utf-8") as fh:
+        html = fh.read()
+    html = html.replace('"/app.css"', '"/app.css?v=%s"' % ASSET_VERSIONS["app.css"])
+    return html.replace('"/app.js"', '"/app.js?v=%s"' % ASSET_VERSIONS["app.js"])
+
+
+ASSET_VERSIONS = {name: _asset_version(name) for name in ("app.css", "app.js")}
+PAGES = {name: _render_page(name) for name in ("index.html", "login.html", "register.html")}
 
 DUMMY_HASH = generate_password_hash("cdb-kanban-dummy")
 
@@ -167,7 +184,7 @@ def as_int(value, field):
     try:
         return int(value)
     except (TypeError, ValueError):
-        raise ValueError("%s must be an integer" % field)
+        raise ValueError("%s must be an integer" % field) from None
 
 
 def payload():
@@ -339,17 +356,17 @@ def on_unexpected(err):
 
 @app.get("/")
 def index():
-    return send_from_directory(APP_DIR, "index.html")
+    return PAGES["index.html"]
 
 
 @app.get("/login")
 def login_page():
-    return send_from_directory(APP_DIR, "login.html")
+    return PAGES["login.html"]
 
 
 @app.get("/register")
 def register_page():
-    return send_from_directory(APP_DIR, "register.html")
+    return PAGES["register.html"]
 
 
 @app.get("/favicon.ico")

@@ -90,8 +90,6 @@ App **không** có rate limiter. Hệ quả:
 - Session client-side: logout không thu hồi cookie đã copy.
 - Chưa test mất toàn máy/PITR/failover; dump nằm cùng VM.
 - HSTS 180 ngày: browser đã truy cập vẫn ép HTTPS kể cả khi rollback.
-- `ssl=strict` áp cho cả zone `akaine.io.vn`; apex đang 522 vì origin riêng không truy cập
-  được. Nếu trỏ apex về origin khác, origin đó phải có cert hợp lệ (nếu không → 526).
 - Cert phụ thuộc `certbot.timer`; VM tắt quá lâu có thể hết hạn.
 - CSP không cho inline script/style.
 - `/api/health?detail=1` chỉ localhost.
