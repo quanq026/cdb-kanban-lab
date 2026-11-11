@@ -48,15 +48,14 @@ infra/
   ops/
     deploy.sh            pull image + compose up + health + rollback theo tag
     docker-compose.yml   service app, bind 127.0.0.1:8000, read-only, log rotate
-    backup.sh            pg_dump Neon -> R2 + prune (chạy trên GitHub Actions)
-    restore-test.sh      restore bản mới nhất vào DB tạm + kiểm tra
+    backup.sh            pg_dump Neon -> R2 (chạy trên GitHub Actions)
     nginx-cdb.conf       reverse proxy :80/:443
     nginx-cloudflare-realip.conf
   migrations/            SQL migration up/down (đã áp dụng)
 
 .github/
   workflows/ci.yml       test Postgres 17 + lint + build/scan/push image arm64
-  workflows/backup.yml   backup Neon ra R2 hằng ngày + restore test hằng tuần
+  workflows/backup.yml   backup Neon ra R2 hằng ngày
   workflows/deploy.yml   self-hosted runner trên VM, deploy theo tag SHA
   dependabot.yml         pip, github-actions, docker (hằng tuần)
   scripts/ci-smoke.py    59 case Flask test client
@@ -133,10 +132,9 @@ push main ──► CI (ubuntu-latest): test Postgres 17 + lint
   nginx conf vào `/opt/cdb/nginx-backup/`, cài conf mới, `nginx -t`, reload, health-check
   10×2 s; lỗi → khôi phục nginx + quay lại `previous_tag` rồi exit 1. Image cũ được prune,
   giữ 3 tag gần nhất.
-- `Backup` chạy hằng ngày 02:17 VN trên `ubuntu-latest`: dump Neon, đẩy dump + manifest
-  counts lên R2, prune còn 14 bản; thứ Hai 10:17 VN restore bản mới nhất vào DB tạm để
-  kiểm tra; 03:47 VN hằng ngày kiểm bản mới nhất không cũ quá 36 h
-  (xem [docs/operations.md §5](docs/operations.md)).
+- `Backup` chạy hằng ngày 02:17 VN trên `ubuntu-latest`: dump Neon bằng Docker
+  `postgres:17` và đẩy bản dump lên R2 (xem [docs/operations.md §5](docs/operations.md)).
+  Retention 30 ngày do Cloudflare R2 lifecycle rule quản lý.
 - `app.py` gắn `?v=<sha1 8 ký tự>` vào `/app.css` và `/app.js` một lần lúc khởi động;
   container restart nên asset mới có URL mới (Cloudflare cache ~4 h).
 
